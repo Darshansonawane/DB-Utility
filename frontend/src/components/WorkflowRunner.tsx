@@ -140,6 +140,11 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
 
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
+      {run?.status === 'PAUSED' && (
+        <Alert severity="warning" action={<Button color="inherit" size="small" variant="outlined" startIcon={<PlayArrowIcon />} onClick={resume} disabled={loading}>Resume</Button>}>
+          {run.steps.find((x) => x.status === 'PAUSED')?.message ?? 'Paused.'}
+        </Alert>
+      )}
       {run && (
         <Stack direction="row" spacing={1} alignItems="center">
           <Typography variant="subtitle2">Run {run.runId.slice(0, 8)}</Typography>
@@ -175,7 +180,7 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
                 {sv.status === 'NO_DATA' && <Alert severity="warning">No records found for the given input(s).</Alert>}
                 {sv.status === 'BLOCKED' && <Alert severity="warning">Not executed. {sv.error}</Alert>}
                 {sv.status === 'FAILED' && <Alert severity="error">{sv.error}{sv.attempts > 1 ? ` (after ${sv.attempts} attempts)` : ''}</Alert>}
-                {(sv.status === 'SKIPPED' || sv.status === 'STOPPED') && <Alert severity="info">{sv.message}</Alert>}
+                {(sv.status === 'SKIPPED' || sv.status === 'STOPPED' || sv.status === 'WAITING' || sv.status === 'PAUSED') && <Alert severity={sv.status === 'PAUSED' ? 'warning' : 'info'}>{sv.message}</Alert>}
                 {sv.status === 'SUCCESS' && sv.message && <Alert severity="info">{sv.message}</Alert>}
                 {Object.keys(sv.outputs ?? {}).length > 0 && (
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>

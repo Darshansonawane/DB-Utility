@@ -97,6 +97,8 @@ export interface WorkflowStep {
   subWorkflowId?: number | null; subWorkflowName?: string;
   /** columns of the first result row saved as variables by this step */
   saveVariables?: QueryExtraction[];
+  /** optional hold before this step: a timed wait and/or a pause until the user resumes the run */
+  pause?: { waitSeconds: number; manualResume: boolean } | null;
 }
 export interface Workflow {
   id?: number; name: string; description?: string; inputs: WorkflowInput[]; steps: WorkflowStep[]; folderId?: number | null;
@@ -107,7 +109,7 @@ export interface Workflow {
 }
 export interface Project { id: number; name: string; description?: string | null; folderCount: number; workflowCount: number; createdAt?: string; updatedAt?: string }
 
-export type StepStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'NO_DATA' | 'FAILED' | 'BLOCKED' | 'STOPPED' | 'SKIPPED';
+export type StepStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'NO_DATA' | 'FAILED' | 'BLOCKED' | 'STOPPED' | 'SKIPPED' | 'WAITING' | 'PAUSED';
 export interface StepRunView {
   order: number; name: string; description?: string; queryName?: string; status: StepStatus; durationMs?: number;
   attempts: number; params: Record<string, string>; paramSources: Record<string, string>;

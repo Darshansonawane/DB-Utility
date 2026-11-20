@@ -2,7 +2,7 @@ import { Chip } from '@mui/material';
 
 const COLORS: Record<string, 'success' | 'error' | 'warning' | 'default' | 'info'> = {
   SUCCESS: 'success', NO_DATA: 'warning', FAILED: 'error', BLOCKED: 'warning', RUNNING: 'info', PENDING: 'default',
-  STOPPED: 'warning', SKIPPED: 'default', PARTIAL: 'warning', INCOMPLETE: 'default', CONNECTED: 'success',
+  STOPPED: 'warning', PAUSED: 'warning', WAITING: 'info', SKIPPED: 'default', PARTIAL: 'warning', INCOMPLETE: 'default', CONNECTED: 'success',
   ROLLED_BACK: 'error', REJECTED: 'error', PREVIEWED: 'info', BLOCKED_WRITE: 'warning',
 };
 

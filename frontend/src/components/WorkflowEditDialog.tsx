@@ -16,6 +16,7 @@ import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import StepTestRun from './workflow/StepTestRun';
 import StepVariableSaves from './workflow/StepVariableSaves';
+import StepPauseEditor from './workflow/StepPauseEditor';
 import VariableInput from './apiauto/VariableInput';
 import { insertStep, reorderSteps } from './workflow/reorder';
 import InsertStepButton, { type StepKind } from './workflow/InsertStepButton';
@@ -226,6 +227,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                   {s.stepType !== 'API_REQUEST' && s.stepType !== 'WORKFLOW' && <TextField size="small" type="number" label="Retries" sx={{ width: 90 }} value={s.retryCount} onChange={(e) => updStep(i, { retryCount: Number(e.target.value) })} />}
                   <FormControlLabel label="Stop on failure" control={<Checkbox checked={s.stopOnFailure} onChange={(e) => updStep(i, { stopOnFailure: e.target.checked })} />} />
                 </Stack>
+                <StepPauseEditor value={s.pause} onChange={(pause) => updStep(i, { pause })} />
                 {s.stepType === 'API_REQUEST' && (
                   <Accordion disableGutters variant="outlined">
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography variant="body2">Wait, polling and assertions · values saved by this API call are available to later steps as <code>{'{{variable}}'}</code> or as step outputs</Typography></AccordionSummary>

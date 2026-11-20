@@ -38,3 +38,11 @@ describe('pipeline bar', () => {
     expect(screen.getByTestId('pipe-node-4').className).toContain('pipe-idle');
   });
 });
+
+describe('pipeline bar for waiting and paused steps', () => {
+  it('shows a waiting step as active and a paused step as a warning', () => {
+    render(<PipelineBar steps={[{ order: 1, name: 'a', status: 'WAITING' }, { order: 2, name: 'b', status: 'PAUSED' }]} />);
+    expect(screen.getByTestId('pipe-node-1').className).toContain('pipe-run');
+    expect(screen.getByTestId('pipe-node-2').className).toContain('pipe-warn');
+  });
+});

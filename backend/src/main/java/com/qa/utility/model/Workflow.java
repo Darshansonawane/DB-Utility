@@ -89,7 +89,8 @@ public record Workflow(
             @Valid com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions,
             Long subWorkflowId,
             String subWorkflowName,
-            @Valid List<QueryExtraction> saveVariables) {
+            @Valid List<QueryExtraction> saveVariables,
+            StepPause pause) {
         public static final String QUERY = "QUERY";
         public static final String API_REQUEST = "API_REQUEST";
         public static final String WORKFLOW = "WORKFLOW";
@@ -101,13 +102,33 @@ public record Workflow(
                     stepType, apiRequestId, apiRequestName, apiOptions, null, null);
         }
 
+        /** Optional hold before a step: a timed wait and/or a pause that continues only when the user resumes the run. */
+        public record StepPause(int waitSeconds, boolean manualResume) {
+            public StepPause {
+                waitSeconds = Math.max(0, Math.min(waitSeconds, 24 * 3600));
+            }
+
+            public boolean any() {
+                return waitSeconds > 0 || manualResume;
+            }
+        }
+
+        /** Constructor with variable saves but no pause (existing callers). */
+        public WorkflowStep(Long id, int order, String name, String description, long queryId, String queryName, List<Integer> dependsOn,
+                            int retryCount, int retryDelayMs, boolean stopOnFailure, List<OutputField> outputFields, List<ParamMapping> mappings,
+                            String stepType, Long apiRequestId, String apiRequestName, com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions,
+                            Long subWorkflowId, String subWorkflowName, List<QueryExtraction> saveVariables) {
+            this(id, order, name, description, queryId, queryName, dependsOn, retryCount, retryDelayMs, stopOnFailure, outputFields, mappings,
+                    stepType, apiRequestId, apiRequestName, apiOptions, subWorkflowId, subWorkflowName, saveVariables, null);
+        }
+
         /** Constructor without per-step variable saves (existing callers). */
         public WorkflowStep(Long id, int order, String name, String description, long queryId, String queryName, List<Integer> dependsOn,
                             int retryCount, int retryDelayMs, boolean stopOnFailure, List<OutputField> outputFields, List<ParamMapping> mappings,
                             String stepType, Long apiRequestId, String apiRequestName, com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions,
                             Long subWorkflowId, String subWorkflowName) {
             this(id, order, name, description, queryId, queryName, dependsOn, retryCount, retryDelayMs, stopOnFailure, outputFields, mappings,
-                    stepType, apiRequestId, apiRequestName, apiOptions, subWorkflowId, subWorkflowName, null);
+                    stepType, apiRequestId, apiRequestName, apiOptions, subWorkflowId, subWorkflowName, null, null);
         }
 
         public boolean isWorkflow() {

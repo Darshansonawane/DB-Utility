@@ -114,6 +114,41 @@ class RuntimeInputsTest extends AbstractDbTest {
         assertEquals("HR-A", cell(at(r, 2)), "the later step read the value saved by step 1 from the first result row");
     }
 
+    static WorkflowStep withPause(int order, SavedQuery q, int waitSeconds, boolean manual) {
+        return new WorkflowStep(null, order, "step " + order, null, q.id(), null, List.of(), 0, 0, false, List.of(), List.of(),
+                "QUERY", null, null, null, null, null, List.of(), new WorkflowStep.StepPause(waitSeconds, manual));
+    }
+
+    @Test
+    void aStepWaitsBeforeRunningWhenAskedTo() {
+        SavedQuery rows = rows("rows");
+        long id = workflow(List.of(), step(1, rows, List.of(), List.of()), withPause(2, rows, 1, false));
+        assertEquals(1, repo.findById(id).orElseThrow().steps().get(1).pause().waitSeconds(), "the wait is stored");
+        long t0 = System.nanoTime();
+        RunView r = executor.runNow(id, Map.of(), null, null);
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        assertEquals("SUCCESS", r.status());
+        assertTrue(ms >= 900, "step 2 waited about a second first, took " + ms + " ms");
+        long t1 = System.nanoTime();
+        executor.runNow(id, Map.of(), null, List.of(2));
+        assertTrue((System.nanoTime() - t1) / 1_000_000 < 900, "running a single step explicitly skips the wait");
+    }
+
+    @Test
+    void aManualPauseStopsTheRunUntilItIsResumed() {
+        SavedQuery rows = rows("rows");
+        long id = workflow(List.of(), step(1, rows, List.of(), List.of()), withPause(2, rows, 0, true), step(3, rows, List.of(), List.of()));
+        RunView paused = executor.runNow(id, Map.of(), null, null);
+        assertEquals("PAUSED", paused.status());
+        assertEquals("SUCCESS", at(paused, 1).status());
+        assertEquals("PAUSED", at(paused, 2).status());
+        assertEquals("PENDING", at(paused, 3).status(), "steps after the pause have not started");
+        RunView resumed = executor.executeNow(paused.runId(), List.of(), null);
+        assertEquals("SUCCESS", resumed.status());
+        assertEquals("SUCCESS", at(resumed, 2).status());
+        assertEquals("SUCCESS", at(resumed, 3).status());
+    }
+
     @Test
     void runtimeOverrideBeatsAutomaticBeatsDefaultBeatsEmpty() {
         SavedQuery rows = rows("rows"), withDefault = echo("SELECT CAST(? AS VARCHAR(50)) AS v", false, "DEFAULT-V"), optional = echo("SELECT CAST(? AS VARCHAR(50)) AS v", false, null);

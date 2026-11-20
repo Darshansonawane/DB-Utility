@@ -60,6 +60,11 @@ public class WorkflowExecutor {
         /** Browser session that started the run: only it may read or control the run, and it supplies the run's connections. */
         final String sessionId = com.qa.utility.security.SessionContext.current();
         volatile boolean stop;
+        /** True when only chosen steps were run explicitly ("Run this step") or inside a nested workflow: pauses and waits are skipped. */
+        volatile boolean skipPauses;
+        /** The step the run is paused before, waiting for the user to resume; and the pauses already resumed. */
+        volatile Integer pausedAt;
+        final Set<Integer> resumed = ConcurrentHashMap.newKeySet();
         volatile String status = "INCOMPLETE";
         volatile Instant finished;
 
@@ -116,6 +121,7 @@ public class WorkflowExecutor {
         RunContext ctx = create(workflowId, inputs);
         Set<Integer> selected = selection(ctx, steps, false);
         mergeOverrides(ctx, overrides);
+        ctx.skipPauses = steps != null && !steps.isEmpty();
         launch(ctx, selected);
         return view(ctx);
     }
@@ -125,6 +131,8 @@ public class WorkflowExecutor {
         RunContext ctx = context(runId);
         if (ctx.running.get()) throw ApiException.conflict("This run is still executing");
         mergeOverrides(ctx, overrides);
+        ctx.skipPauses = steps != null && !steps.isEmpty();
+        if (ctx.pausedAt != null) { ctx.resumed.add(ctx.pausedAt); ctx.pausedAt = null; }
         launch(ctx, selection(ctx, steps, true));
         return view(ctx);
     }
@@ -144,6 +152,7 @@ public class WorkflowExecutor {
         RunContext ctx = create(workflowId, inputs);
         mergeOverrides(ctx, overrides);
         Set<Integer> selected = selection(ctx, steps, false);
+        ctx.skipPauses = steps != null && !steps.isEmpty();
         ctx.running.set(true);
         runSteps(ctx, selected);
         return view(ctx);
@@ -152,6 +161,8 @@ public class WorkflowExecutor {
     public RunView executeNow(String runId, List<Integer> steps, Map<Integer, Map<String, String>> overrides) {
         RunContext ctx = context(runId);
         mergeOverrides(ctx, overrides);
+        ctx.skipPauses = steps != null && !steps.isEmpty();
+        if (ctx.pausedAt != null) { ctx.resumed.add(ctx.pausedAt); ctx.pausedAt = null; }
         ctx.running.set(true);
         runSteps(ctx, selection(ctx, steps, true));
         return view(ctx);
@@ -233,6 +244,19 @@ public class WorkflowExecutor {
                     put(ctx, st, simple(st, halted ? "SKIPPED" : "STOPPED", Map.of(), Map.of(), why, null));
                     continue;
                 }
+                if (st.pause() != null && st.pause().any() && !ctx.skipPauses && ctx.parent == null) {
+                    if (st.pause().manualResume() && !ctx.resumed.contains(st.order())) {
+                        // stop here: this step and everything after it stay pending until the user resumes the run
+                        invalidateDownstream(ctx, st.order());
+                        put(ctx, st, simple(st, "PAUSED", Map.of(), Map.of(), "Paused before this step. Resume the run when the data is ready.", null));
+                        ctx.pausedAt = st.order();
+                        break;
+                    }
+                    if (st.pause().waitSeconds() > 0 && !waitBefore(ctx, st)) {
+                        put(ctx, st, simple(st, "STOPPED", Map.of(), Map.of(), "Run was stopped while waiting before this step", null));
+                        continue;
+                    }
+                }
                 invalidateDownstream(ctx, st.order());
                 put(ctx, st, simple(st, "RUNNING", Map.of(), Map.of(), null, null));
                 StepRunView v = runStep(ctx, st);
@@ -252,6 +276,32 @@ public class WorkflowExecutor {
         }
     }
 
+    /** Timed wait before a step. The step shows WAITING with a live countdown; returns false if the run was stopped meanwhile. */
+    private boolean waitBefore(RunContext ctx, WorkflowStep st) {
+        long end = System.nanoTime() + Duration.ofSeconds(st.pause().waitSeconds()).toNanos();
+        long lastShown = -1;
+        while (true) {
+            long remaining = end - System.nanoTime();
+            if (remaining <= 0) return true;
+            long left = (remaining + 999_999_999L) / 1_000_000_000L; // whole seconds, rounded up
+            if (stopped(ctx)) return false;
+            if (left != lastShown) {
+                lastShown = left;
+                ctx.steps.put(st.order(), simple(st, "WAITING", Map.of(), Map.of(), "Waiting " + countdown(left) + " before this step", null));
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+    }
+
+    static String countdown(long seconds) {
+        return seconds >= 60 ? (seconds / 60) + " min " + (seconds % 60) + " s" : seconds + " s";
+    }
+
     /** A stop request on a run also stops every workflow nested inside it. */
     private static boolean stopped(RunContext c) {
         return c.stop || (c.parent != null && stopped(c.parent));
@@ -260,6 +310,7 @@ public class WorkflowExecutor {
     private String overallStatus(RunContext ctx) {
         Collection<StepRunView> vs = ctx.steps.values();
         if (vs.stream().anyMatch(v -> "FAILED".equals(v.status()))) return "FAILED";
+        if (ctx.pausedAt != null) return "PAUSED";
         if (ctx.stop) return "STOPPED";
         if (vs.stream().anyMatch(v -> "STOPPED".equals(v.status()))) return "STOPPED";
         if (vs.stream().anyMatch(v -> "BLOCKED".equals(v.status()))) return "PARTIAL";
@@ -653,7 +704,7 @@ public class WorkflowExecutor {
 
     private void put(RunContext ctx, WorkflowStep st, StepRunView v) {
         ctx.steps.put(st.order(), v);
-        if (!"RUNNING".equals(v.status())) persistStep(ctx, v);
+        if (!"RUNNING".equals(v.status()) && !"WAITING".equals(v.status()) && !"PAUSED".equals(v.status())) persistStep(ctx, v);
     }
 
     private RunView view(RunContext ctx) {

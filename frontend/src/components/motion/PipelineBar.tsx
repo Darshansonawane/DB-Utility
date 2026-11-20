@@ -2,7 +2,7 @@ import { Box, Tooltip } from '@mui/material';
 
 export interface PipelineStep { order: number; name: string; status: string }
 
-const tone = (s: string) => (s === 'RUNNING' ? 'run' : s === 'SUCCESS' ? 'ok' : s === 'FAILED' ? 'bad' : s === 'NO_DATA' || s === 'BLOCKED' || s === 'STOPPED' ? 'warn' : 'idle');
+const tone = (s: string) => (s === 'RUNNING' || s === 'WAITING' ? 'run' : s === 'PAUSED' ? 'warn' : s === 'SUCCESS' ? 'ok' : s === 'FAILED' ? 'bad' : s === 'NO_DATA' || s === 'BLOCKED' || s === 'STOPPED' ? 'warn' : 'idle');
 
 /**
  * A compact pipeline overview of a workflow run: one node per step joined by a line. The running node pulses, finished nodes

@@ -87,6 +87,8 @@ ALTER TABLE workflow_step ADD COLUMN IF NOT EXISTS api_request_id BIGINT;
 ALTER TABLE workflow_step ADD COLUMN IF NOT EXISTS api_options_json TEXT;
 -- Variables a workflow step saves from the first result row (JSON list of {variable, column, secret, folderId}).
 ALTER TABLE workflow_step ADD COLUMN IF NOT EXISTS save_variables_json TEXT;
+-- Optional hold before a step (JSON {waitSeconds, manualResume}).
+ALTER TABLE workflow_step ADD COLUMN IF NOT EXISTS pause_json TEXT;
 
 CREATE TABLE IF NOT EXISTS workflow_param_mapping (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,

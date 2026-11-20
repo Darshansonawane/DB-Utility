@@ -57,7 +57,7 @@ public class WorkflowRepository {
                                         r.getInt("retry_count"), r.getInt("retry_delay_ms"), r.getBoolean("stop_on_failure"),
                                         parseOutputs(r.getString("output_fields")), maps, r.getString("step_type"), apiRequestId,
                                         r.getString("api_name"), parseOptions(r.getString("api_options_json")),
-                                        subId, r.getString("sub_name"), readSaves(r.getString("save_variables_json")));
+                                        subId, r.getString("sub_name"), readSaves(r.getString("save_variables_json")), readPause(r.getString("pause_json")));
                             }, id);
                     String lastStatus = null;
                     java.time.Instant lastRunAt = null;
@@ -131,7 +131,7 @@ public class WorkflowRepository {
             KeyHolder kh = new GeneratedKeyHolder();
             jdbc.update(con -> {
                 PreparedStatement ps = con.prepareStatement(
-                        "INSERT INTO workflow_step (workflow_id, step_order, name, description, query_id, depends_on, retry_count, retry_delay_ms, stop_on_failure, output_fields, step_type, api_request_id, api_options_json, sub_workflow_id, save_variables_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO workflow_step (workflow_id, step_order, name, description, query_id, depends_on, retry_count, retry_delay_ms, stop_on_failure, output_fields, step_type, api_request_id, api_options_json, sub_workflow_id, save_variables_json, pause_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         Statement.RETURN_GENERATED_KEYS);
                 ps.setLong(1, wid);
                 ps.setInt(2, s.order());
@@ -151,6 +151,7 @@ public class WorkflowRepository {
                 if (s.isWorkflow() && s.subWorkflowId() != null) ps.setLong(14, s.subWorkflowId());
                 else ps.setNull(14, java.sql.Types.BIGINT);
                 ps.setString(15, writeSaves(s.saveVariables()));
+                ps.setString(16, writePause(s.pause()));
                 return ps;
             }, kh);
             long stepId = ((Number) kh.getKeys().get(kh.getKeys().containsKey("id") ? "id" : kh.getKeys().keySet().iterator().next())).longValue();
@@ -191,6 +192,23 @@ public class WorkflowRepository {
             return l == null || l.isEmpty() ? null : JSON.writeValueAsString(l);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    private static String writePause(WorkflowStep.StepPause p) {
+        try {
+            return p == null || !p.any() ? null : JSON.writeValueAsString(p);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static WorkflowStep.StepPause readPause(String j) {
+        if (j == null || j.isBlank()) return null;
+        try {
+            return JSON.readValue(j, WorkflowStep.StepPause.class);
+        } catch (Exception e) {
+            return null;
         }
     }
 
