@@ -1,0 +1,30 @@
+export default function ApiAutomation() {
+  const [tab, setTab] = useState(0);
+  const [requests, setRequests] = useState<ApiRequestDef[]>([]);
+  const [vars, setVars] = useState<VariableView[]>([]);
+  const [workflows, setWorkflows] = useState<ApiWorkflowDef[]>([]);
+  const [openRuns, setOpenRuns] = useState<string[]>([]);
+  const { error, run } = useAsync();
+  const loadReq = useCallback(async () => { const r = await run(() => api.apiRequests()); if (r) setRequests(r); }, [run]);
+  const loadVars = useCallback(async () => { const v = await run(() => api.variables()); if (v) setVars(v); }, [run]);
+  const loadWf = useCallback(async () => { const w = await run(() => api.apiWorkflows()); if (w) setWorkflows(w); }, [run]);
+  useEffect(() => { void loadReq(); void loadVars(); void loadWf(); }, [loadReq, loadVars, loadWf]);
+  const consumed = useCallback(() => setOpenRuns([]), []);
+  return (
+    <Stack spacing={2}>
+      <Typography variant="h5" fontWeight={700}>API Automation</Typography>
+      <Typography variant="body2" color="text.secondary">
+        Call your QA/UAT APIs, save values from the responses (such as a new wallet id) into variables, and use them in queries and workflows as {'{{name}}'}.
+      </Typography>
+      {error && <Alert severity="error">{error}</Alert>}
+      <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tab label={`Requests (${requests.length})`} /><Tab label="API Workflows" /><Tab label="Runs" /><Tab label="Reports" /><Tab label={`Variables (${vars.length})`} />
+      </Tabs>
+      {tab === 0 && <Requests requests={requests} reload={() => { void loadReq(); void loadVars(); void loadWf(); }} />}
+      {tab === 1 && <ApiWorkflowsTab requests={requests} onStarted={(ids) => { setOpenRuns(ids); setTab(2); void loadVars(); }} />}
+      {tab === 2 && <ApiRunsTab workflows={workflows} openRunIds={openRuns} onConsumed={consumed} />}
+      {tab === 3 && <ApiReportsTab workflows={workflows} />}
+      {tab === 4 && <Variables vars={vars} reload={() => void loadVars()} />}
+    </Stack>
+  );
+}

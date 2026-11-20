@@ -1,0 +1,14 @@
+# Never commit credentials or local data
+.env
+*.env
+.qa-database-utility/
+master.key
+*.mv.db
+*.trace.db
+target/
+node_modules/
+dist/
+.idea/
+.vscode/
+*.log
+.DS_Store
