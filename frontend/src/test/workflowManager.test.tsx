@@ -95,7 +95,7 @@ describe('Projects level', () => {
 });
 
 describe('Folders and workflows levels', () => {
-  it('opens a project to its folders, then a folder to its workflows, with breadcrumbs and Back', async () => {
+  it('opens a project to its folders, then a folder to its workflows, and goes back through the navigation tree', async () => {
     page();
     await userEvent.click(await screen.findByRole('button', { name: 'open project Savings Wallet' }));
     expect(await screen.findByRole('button', { name: 'open folder E2E Automation' })).toBeInTheDocument();
@@ -103,20 +103,17 @@ describe('Folders and workflows levels', () => {
     expect(screen.queryByRole('button', { name: 'open folder Regression' })).not.toBeInTheDocument();
     expect(screen.getByText('Top level flow')).toBeInTheDocument();
     expect(screen.queryByText('Login')).not.toBeInTheDocument();
-    const crumbs = screen.getByRole('navigation', { name: 'location' });
-    expect(within(crumbs).getByText('All Projects')).toBeInTheDocument();
-    expect(within(crumbs).getByText('Workflows')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'location' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'back' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'open folder E2E Automation' }));
     expect(await screen.findByText('Create wallet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'open folder Regression' })).toBeInTheDocument();
     expect(screen.queryByText('Top level flow')).not.toBeInTheDocument();
-    const trail = screen.getByRole('navigation', { name: 'location' });
-    expect(within(trail).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['All Projects', 'Savings Wallet', 'E2E Automation']);
 
-    await userEvent.click(screen.getByRole('button', { name: 'back' }));
+    await userEvent.click(screen.getByRole('button', { name: 'tree project Savings Wallet' }));
     expect(await screen.findByText('Top level flow')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'back' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'projects and folders' })).getByText('All projects'));
     expect(await screen.findByRole('button', { name: 'open project HelloBank' })).toBeInTheDocument();
   });
 
@@ -133,8 +130,7 @@ describe('Folders and workflows levels', () => {
     await userEvent.click(screen.getByRole('button', { name: 'open folder Regression' }));
     const failed = await screen.findByTestId('workflow-2');
     expect(within(failed).getByText(/Failed · 3 h ago/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'back' }));
-    await userEvent.click(screen.getByRole('button', { name: 'back' }));
+    await userEvent.click(screen.getByRole('button', { name: 'tree project Savings Wallet' }));
     await userEvent.click(await screen.findByRole('button', { name: 'open folder Micro flows' }));
     await screen.findByTestId('workflow-4');
   });
@@ -142,7 +138,7 @@ describe('Folders and workflows levels', () => {
   it('shows "Never run" for a workflow that was never executed, and an empty state for an empty project', async () => {
     page('/workflows?project=1');
     expect(within(await screen.findByTestId('workflow-3')).getByText('Never run')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'back' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'projects and folders' })).getByText('All projects'));
     await userEvent.click(await screen.findByRole('button', { name: 'open project Fraud Engine' }));
     expect(await screen.findByText('This project is empty')).toBeInTheDocument();
   });

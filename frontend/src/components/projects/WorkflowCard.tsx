@@ -1,7 +1,5 @@
 import { Box, Button, Card, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import ApiIcon from '@mui/icons-material/Api';
-import StorageIcon from '@mui/icons-material/Storage';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import DriveFileMoveIcon from '@mui/icons-material/DriveFileMove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -11,24 +9,10 @@ import { timeAgo } from '../../utils/time';
 import LastRunBadge from './LastRunBadge';
 import { WORKFLOW_DRAG } from './workflowHierarchy';
 
-function StepChip({ s, onOpenWorkflow }: { s: Workflow['steps'][number]; onOpenWorkflow: (id: number) => void }) {
-  const type = s.stepType ?? 'QUERY';
-  const icon = type === 'WORKFLOW' ? <AccountTreeIcon /> : type === 'API_REQUEST' ? <ApiIcon /> : <StorageIcon />;
-  const detail = type === 'WORKFLOW' ? `Runs workflow: ${s.subWorkflowName ?? ''}` : type === 'API_REQUEST' ? `API: ${s.apiRequestName ?? ''}` : `DB query: ${s.queryName ?? ''}`;
-  return (
-    <Tooltip title={detail}>
-      <Chip size="small" icon={icon} label={`${s.order}. ${s.name}`} color={type === 'WORKFLOW' ? 'secondary' : 'default'} variant={type === 'WORKFLOW' ? 'filled' : 'outlined'}
-        onClick={type === 'WORKFLOW' && s.subWorkflowId ? () => onOpenWorkflow(s.subWorkflowId!) : undefined} />
-    </Tooltip>
-  );
-}
-
-const MAX_STEP_CHIPS = 6;
-
 /** Level 3: a workflow. Name, description, step count, last execution; Run, Edit, Move and Delete. */
-export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit, onMove, onDelete, onOpenWorkflow }: {
+export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit, onMove, onDelete }: {
   w: Workflow; index?: number; path?: string; usedIn?: string[];
-  onRun: () => void; onEdit: () => void; onMove: () => void; onDelete: () => void; onOpenWorkflow: (id: number) => void;
+  onRun: () => void; onEdit: () => void; onMove: () => void; onDelete: () => void;
 }) {
   return (
     <Card className="fade-up" style={{ '--i': Math.min(index, 8) } as React.CSSProperties} draggable
@@ -47,11 +31,7 @@ export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit
           </Stack>
           {path && <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.25 }}>{path}</Typography>}
           {w.description && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{w.description}</Typography>}
-          <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap alignItems="center">
-            {w.steps.slice(0, MAX_STEP_CHIPS).map((s) => <StepChip key={s.order} s={s} onOpenWorkflow={onOpenWorkflow} />)}
-            {w.steps.length > MAX_STEP_CHIPS && <Chip size="small" variant="outlined" label={`+${w.steps.length - MAX_STEP_CHIPS} more`} />}
-            {w.updatedAt && <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>Updated {timeAgo(w.updatedAt)}</Typography>}
-          </Stack>
+          {w.updatedAt && <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>Updated {timeAgo(w.updatedAt)}</Typography>}
         </Box>
         <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" justifyContent="flex-end" sx={{ maxWidth: 260 }}>
           <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={onRun}>Run</Button>

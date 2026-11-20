@@ -1,16 +1,13 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Alert, Box, Breadcrumbs, Button, Card, Dialog, DialogContent, DialogTitle, IconButton, InputAdornment, Link, MenuItem, Skeleton, Stack, TextField, Tooltip, Typography,
+  Alert, Box, Button, Card, Dialog, DialogContent, DialogTitle, IconButton, InputAdornment, MenuItem, Skeleton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ClearIcon from '@mui/icons-material/Clear';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
-import HomeIcon from '@mui/icons-material/Home';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import MenuIcon from '@mui/icons-material/Menu';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SearchIcon from '@mui/icons-material/Search';
 import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
 import { api, errMsg } from '../services/api';
@@ -151,9 +148,6 @@ export default function WorkflowManager() {
   };
 
   // ---- navigation helpers
-  const parentOfCurrent = () => (folder ? go(projectId, folder.parentId) : go(0, 0));
-  const trail: Folder[] = [];
-  for (let id = folderId, guard = 0; id !== 0 && guard++ < 20;) { const f = data.folders.find((x) => x.id === id); if (!f) break; trail.unshift(f); id = f.parentId; }
 
   const folderCounts = (f: Folder) => ({ workflows: workflowsUnder(data, f.id).length, subfolders: subtree(data.folders, f.id).size - 1 });
   const projectName = (id: number) => data.projects.find((p) => p.id === id)?.name ?? '';
@@ -170,7 +164,7 @@ export default function WorkflowManager() {
   const workflowCard = (w: Workflow, i: number, withPath = false) => (
     <WorkflowCard key={w.id} w={w} index={i} usedIn={usedIn.get(w.id!)} path={withPath ? pathLabel(data, w.projectId ?? 0, w.folderId ?? 0) : undefined}
       onRun={() => setRunning(w)} onEdit={() => setEditing(w)} onMove={() => setDlg({ kind: 'moveWorkflow', workflow: w })} onDelete={() => setDlg({ kind: 'deleteWorkflow', workflow: w })}
-      onOpenWorkflow={(id) => { const t = data.workflows.find((x) => x.id === id); if (t) setEditing(t); }} />
+    />
   );
   const projectCard = (p: Project, i: number) => (
     <ProjectCard key={p.id} project={p} index={i} over={over === `${p.id}:0`} dropProps={dropProps(p.id, 0)} onOpen={() => { clearFilters(); go(p.id, 0); }}
@@ -230,22 +224,7 @@ export default function WorkflowManager() {
               <Tooltip title={showTree ? 'Hide navigation tree' : 'Show navigation tree'}>
                 <IconButton size="small" aria-label="toggle navigation tree" onClick={() => setShowTree((v) => !v)} sx={{ display: { xs: 'none', md: 'inline-flex' } }}>{showTree ? <MenuOpenIcon /> : <MenuIcon />}</IconButton>
               </Tooltip>
-              {projectId !== 0 && (
-                <Button size="small" startIcon={<ArrowBackIcon />} onClick={parentOfCurrent} aria-label="back">Back</Button>
-              )}
-              <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} aria-label="location" sx={{ flex: 1, minWidth: 0 }}>
-                <Link component="button" underline="hover" color={projectId === 0 ? 'text.primary' : 'inherit'} onClick={() => go(0, 0)}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: projectId === 0 ? 700 : 400 }}><HomeIcon fontSize="small" /> All Projects</Link>
-                {project && (
-                  <Link component="button" underline="hover" color={folderId === 0 ? 'text.primary' : 'inherit'} onClick={() => go(project.id, 0)} {...dropProps(project.id, 0)}
-                    sx={{ fontWeight: folderId === 0 ? 700 : 400, borderRadius: 1, px: 0.5, bgcolor: over === `${project.id}:0` ? 'action.selected' : undefined }}>{project.name}</Link>
-                )}
-                {trail.map((f) => (
-                  <Link key={f.id} component="button" underline="hover" color={f.id === folderId ? 'text.primary' : 'inherit'} onClick={() => go(projectId, f.id)} {...dropProps(projectId, f.id)}
-                    sx={{ fontWeight: f.id === folderId ? 700 : 400, borderRadius: 1, px: 0.5, bgcolor: over === `${projectId}:${f.id}` ? 'action.selected' : undefined }}>{f.name}</Link>
-                ))}
-                {project && <Typography color="text.secondary">Workflows</Typography>}
-              </Breadcrumbs>
+              <Box sx={{ flex: 1 }} />
               {project && !filtering && (
                 <Button size="small" startIcon={<CreateNewFolderIcon />} onClick={() => setDlg({ kind: 'folderName', mode: 'new' })}>New folder{folderId ? ' here' : ''}</Button>
               )}
