@@ -14,10 +14,24 @@ import java.util.List;
 public class WorkflowController {
     private final WorkflowService service;
     private final WorkflowExecutor executor;
+    private final com.qa.utility.workflow.ResultEditService edits;
 
-    public WorkflowController(WorkflowService service, WorkflowExecutor executor) {
+    public WorkflowController(WorkflowService service, WorkflowExecutor executor, com.qa.utility.workflow.ResultEditService edits) {
         this.service = service;
         this.executor = executor;
+        this.edits = edits;
+    }
+
+    /** Previews changing one cell of a step's result in the database (nothing is written). */
+    @PostMapping("/workflow-runs/{runId}/steps/{order}/edit-preview")
+    public com.qa.utility.workflow.ResultEditService.EditPreview editPreview(@PathVariable String runId, @PathVariable int order, @RequestBody com.qa.utility.workflow.ResultEditService.EditRequest r) {
+        return edits.preview(runId, order, r);
+    }
+
+    /** Writes the previewed change, using the confirmation token the preview returned. */
+    @PostMapping("/workflow-runs/{runId}/steps/{order}/edit-apply")
+    public com.qa.utility.workflow.ResultEditService.EditResult editApply(@PathVariable String runId, @PathVariable int order, @RequestBody com.qa.utility.workflow.ResultEditService.EditRequest r) {
+        return edits.apply(runId, order, r);
     }
 
     @GetMapping("/workflows")

@@ -296,7 +296,9 @@ public class SqlExecutionService {
     }
 
     private String writeBlockedReason(ExecContext ctx, AppSettings s) {
-        if (s.readOnlyMode()) return "Read-only mode is ON. Turn it off in Settings to run write statements.";
+        // like workflow steps, an edit made in a workflow run (RESULT_EDIT) is decided by the database user's privileges, not by the global switch;
+        // it still needs the preview and its one-time confirmation token
+        if (s.readOnlyMode() && !"RESULT_EDIT".equals(ctx.kind())) return "Read-only mode is ON. Turn it off in Settings to run write statements.";
         if (ctx.adHoc() && !s.adHocWritesEnabled()) {
             return "Ad-hoc writes are disabled. Save the statement to the query library (the allowlist) and run it from there, or enable ad-hoc writes in Settings.";
         }

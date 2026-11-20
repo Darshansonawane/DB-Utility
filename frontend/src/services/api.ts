@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type {
   AppSettings, DbType, Project, RunForm, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
-  SqlAnalysis, StatusView, ApiRequestDef, ApiRunResult, ApiWorkflowDef, ApiRunView, Folder, FolderKind, VariableBody, PreviewResult, ParamPreview, InfoItem, InfoSummary, RunSummary, WorkflowReport, OverviewRow, VariableView, DatabaseList, TestResult, Workflow, WritePreview,
+  SqlAnalysis, StatusView, ApiRequestDef, ApiRunResult, ApiWorkflowDef, ApiRunView, Folder, FolderKind, VariableBody, PreviewResult, ParamPreview, InfoItem, InfoSummary, RunSummary, WorkflowReport, OverviewRow, VariableView, DatabaseList, TestResult, Workflow, WritePreview, CellEditPreview,
 } from '../types';
 
 // The browser only talks to the backend. Credentials never leave the server.
@@ -127,6 +127,10 @@ export const api = {
   deleteWorkflow: (id: number) => d<void>(http.delete(`/workflows/${id}`)),
   startRun: (id: number, inputs: Record<string, string>, overrides: Record<number, Record<string, string>>, steps: number[]) =>
     d<RunView>(http.post(`/workflows/${id}/runs`, { inputs, overrides, steps })),
+  previewCellEdit: (runId: string, order: number, b: { rowIndex: number; column: string; value: string }) =>
+    d<CellEditPreview>(http.post(`/workflow-runs/${runId}/steps/${order}/edit-preview`, b)),
+  applyCellEdit: (runId: string, order: number, b: { rowIndex: number; column: string; value: string; confirmationToken?: string | null }) =>
+    d<{ column: string; newValue?: string | null; affectedRows?: number | null }>(http.post(`/workflow-runs/${runId}/steps/${order}/edit-apply`, b)),
   getRun: (runId: string) => d<RunView>(http.get(`/workflow-runs/${runId}`)),
   executeOnRun: (runId: string, steps: number[], overrides: Record<number, Record<string, string>>) =>
     d<RunView>(http.post(`/workflow-runs/${runId}/execute`, { steps, overrides })),

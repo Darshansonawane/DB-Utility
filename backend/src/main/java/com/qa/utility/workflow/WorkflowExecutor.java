@@ -143,6 +143,45 @@ public class WorkflowExecutor {
         return view(ctx);
     }
 
+    /** One step of a run (session-checked), for result editing. */
+    public StepRunView stepOf(String runId, int order) {
+        StepRunView v = context(runId).steps.get(order);
+        if (v == null) throw ApiException.notFound("Step " + order + " has no result in this run");
+        return v;
+    }
+
+    /** The saved query a DB step runs, or null for other step types. */
+    public SavedQuery queryOf(String runId, int order) {
+        return context(runId).workflow.steps().stream().filter(s -> s.order() == order && !s.isApi() && !s.isWorkflow()).findFirst()
+                .flatMap(s -> queries.findById(s.queryId())).orElse(null);
+    }
+
+    /** Replaces one cell of a step's retained result after the row was edited in the database. */
+    public void patchCell(String runId, int order, int rowIndex, int colIndex, Object value) {
+        RunContext ctx = context(runId);
+        StepRunView v = ctx.steps.get(order);
+        if (v == null || v.result() == null) return;
+        List<List<Object>> rows = new ArrayList<>();
+        for (int i = 0; i < v.result().rows().size(); i++) {
+            List<Object> r = new ArrayList<>(v.result().rows().get(i));
+            if (i == rowIndex) r.set(colIndex, value);
+            rows.add(r);
+        }
+        QueryResult old = v.result();
+        QueryResult patched = new QueryResult(old.columns(), rows, old.truncated(), old.rowCount(), old.affectedRows(), old.durationMs(), old.statementType(), old.extracted());
+        ctx.steps.put(order, new StepRunView(v.order(), v.name(), v.description(), v.queryName(), v.status(), v.durationMs(), v.attempts(), v.params(), v.paramSources(),
+                patched, v.outputs(), v.rowsAffected(), v.message(), v.error(), v.children()));
+        if (rowIndex == 0) {
+            Map<String, Object> first = ctx.firstRows.get(order);
+            if (first != null) {
+                Map<String, Object> copy = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+                copy.putAll(first);
+                copy.put(old.columns().get(colIndex).name(), value);
+                ctx.firstRows.put(order, copy);
+            }
+        }
+    }
+
     public RunView get(String runId) {
         return view(context(runId));
     }

@@ -109,6 +109,7 @@ export interface Workflow {
 }
 export interface Project { id: number; name: string; description?: string | null; folderCount: number; workflowCount: number; createdAt?: string; updatedAt?: string }
 
+export interface CellEditPreview { table: string; keyColumns: string[]; column: string; oldValue?: string | null; newValue?: string | null; preview: WritePreview }
 export type StepStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'NO_DATA' | 'FAILED' | 'BLOCKED' | 'STOPPED' | 'SKIPPED' | 'WAITING' | 'PAUSED';
 export interface StepRunView {
   order: number; name: string; description?: string; queryName?: string; status: StepStatus; durationMs?: number;
