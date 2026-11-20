@@ -1,4 +1,4 @@
-# FlowNexus – API, SQL and variable automation
+# DB-Utility – API, SQL and variable automation
 
 ## Where things are
 | Area | What it does |
@@ -26,7 +26,7 @@ Folders only organise: deleting a folder never deletes what is inside, items mov
 
 ## Variable scopes and precedence
 `{{name}}` resolves, most specific first: **this run** → **folder-level** (the request/workflow's folder and its parents) →
-**environment** (QA/UAT, chosen with *Active environment*) → **global**.
+**environment** (QA/Staging/Development, chosen with *Active environment*) → **global**.
 Global names are unique. Extractions and scripts write **global** variables (or the run's private scope when a workflow does
 not publish globally). Secrets are encrypted at rest and masked in the UI, previews, logs and history.
 Built-ins: `{{$uuid}} {{$timestamp}} {{$isoDate(+7)}} {{$randomInt(1,100)}} {{$randomString(8)}} {{$randomNumeric(10)}}`.
@@ -34,7 +34,7 @@ Built-ins: `{{$uuid}} {{$timestamp}} {{$isoDate(+7)}} {{$randomInt(1,100)}} {{$r
 ## SQL steps in API workflows
 Read-only saved queries only. Parameters come from the step's values (or the query's default / mapped variable). With
 *Max attempts* > 1 the step polls until a row exists; the query's extraction rules are applied to the first row. A missing
-variable or a missing column fails the step immediately with a clear message. Needs an active QA/UAT connection.
+variable or a missing column fails the step immediately with a clear message. Needs an active QA/Staging/Development connection.
 
 ## Workflow Manager: micro flows inside big flows
 A workflow step is a **DB query**, an **API request** or **another workflow** (*Add workflow*). The nested workflow's inputs are

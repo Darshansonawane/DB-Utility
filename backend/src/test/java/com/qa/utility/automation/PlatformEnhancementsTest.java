@@ -118,21 +118,21 @@ class PlatformEnhancementsTest extends AbstractDbTest {
         Folder walletSub = folder("VARIABLE", wallet.id(), "Sub");
         variables.save(null, body("limit", "global", "GLOBAL", 0L, null));
         variables.save(null, body("limit", "qa", "ENVIRONMENT", 0L, "QA"));
-        variables.save(null, body("limit", "uat", "ENVIRONMENT", 0L, "UAT"));
+        variables.save(null, body("limit", "staging", "ENVIRONMENT", 0L, "STAGING"));
         variables.save(null, body("limit", "folder", "FOLDER", wallet.id(), null));
 
         assertEquals("global", variables.resolve("{{limit}}"), "no environment, no folder: global");
         variables.setActiveEnvironment("QA");
         assertEquals("qa", variables.resolve("{{limit}}"));
-        variables.setActiveEnvironment("UAT");
-        assertEquals("uat", variables.resolve("{{limit}}"));
+        variables.setActiveEnvironment("Staging");
+        assertEquals("staging", variables.resolve("{{limit}}"));
 
         VarScope run = new VarScope(false);
         run.setBaseFolders(folders.chain(walletSub.id()));
         assertEquals("folder", variables.resolve("{{limit}}", false, run), "a folder variable beats environment and global, also for subfolders");
         VarScope other = new VarScope(false);
         other.setBaseFolders(folders.chain(folder("VARIABLE", 0, "Other").id()));
-        assertEquals("uat", variables.resolve("{{limit}}", false, other), "other folders do not see it");
+        assertEquals("staging", variables.resolve("{{limit}}", false, other), "other folders do not see it");
         run.set("limit", "run", false);
         assertEquals("run", variables.resolve("{{limit}}", false, run), "run scope wins");
 

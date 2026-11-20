@@ -7,7 +7,7 @@
 | JDK | 21 | `brew install openjdk@21` |
 | Maven | 3.9+ | `brew install maven` |
 | Node.js | 18+ (tested 25) | `brew install node` |
-| VPN | your company VPN | connect before using a QA/UAT profile |
+| VPN | your company VPN | connect before using a QA/Staging/Development profile |
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
@@ -36,7 +36,7 @@ On first start the backend creates `~/.qa-database-utility/` (metadata DB and en
 
 ## First use
 
-1. **Database Connections -> New connection.** Choose the database type (MySQL or MongoDB) and environment (QA, UAT or Development). MySQL: host, port, database, username, password. MongoDB: host and port, or a connection string (`mongodb://...` / `mongodb+srv://...`), database, optional username/password, authentication database and TLS. Choose an **access password** for the connection (needed later to connect, test, edit or delete it). Click **Test connection**, save, then **Connect**. You can connect several connections of both types at once; **Use** picks which one queries run on.
+1. **Database Connections -> New connection.** Choose the database type (MySQL or MongoDB) and environment (QA, Staging or Development). MySQL: host, port, username, password. MongoDB: host and port, or a connection string (`mongodb://...` / `mongodb+srv://...`), optional username/password, authentication database and TLS. No database name is needed: after connecting, the databases the database user can access are discovered and chosen in the top bar or in the query workspace, and you can switch between them without reconnecting. Choose an **access password** for the connection (needed later to connect, test, edit or delete it). Click **Test connection**, save, then **Connect**. You can connect several connections of both types at once; **Use** picks which one queries run on.
 2. **SQL Editor** or **Saved Queries** to run SELECTs. Writes are blocked until you turn read-only mode off in **Settings**.
 3. **Savings Wallet Workflow**: enter Customer ID and Savings Wallet Contributor ID, click **Fetch All Details**.
 

@@ -359,6 +359,9 @@ public class SqlExecutionService {
             return new ApiException(HttpStatus.REQUEST_TIMEOUT, "Query exceeded the " + s.queryTimeoutSeconds() + "s execution timeout and was cancelled.", e);
         }
         if (e.getCause() instanceof ApiException a) return a;
+        if (e.getErrorCode() == 1046) {
+            return new ApiException(HttpStatus.BAD_REQUEST, "No database selected. Choose a database in the top bar, or qualify table names (database.table).", e);
+        }
         String state = e.getSQLState() == null ? "" : "SQLState " + e.getSQLState() + ", ";
         return new ApiException(HttpStatus.BAD_REQUEST, "SQL error (" + state + "code " + e.getErrorCode() + "): " + e.getMessage(), e);
     }

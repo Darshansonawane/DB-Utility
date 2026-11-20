@@ -41,7 +41,7 @@ function RunVariablesDialog({ wf, onClose, onStart }: { wf: { name: string; coun
       <DialogTitle>Run {wf.name}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={1.5} sx={{ mt: 0.5 }}>
-          <Alert severity="warning" sx={{ py: 0 }}>This sends real API requests from {wf.count} workflow(s) to your QA/UAT environment.</Alert>
+          <Alert severity="warning" sx={{ py: 0 }}>This sends real API requests from {wf.count} workflow(s) to your QA, Staging or Development environment.</Alert>
           <Typography variant="body2">Optional run variables, available as {'{{name}}'} in this run only (for example a customer id).</Typography>
           {rows.map((r, i) => (
             <Stack key={i} direction="row" spacing={1}>

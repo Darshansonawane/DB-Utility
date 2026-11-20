@@ -191,6 +191,7 @@ public class MongoExecutionService {
         long start = System.nanoTime();
         ObjectNode bound = (ObjectNode) bind(spec.root(), params.iterator());
         String dbName = databaseOverride != null && !databaseOverride.isBlank() ? databaseOverride : provider.defaultDatabase();
+        if (dbName == null || dbName.isBlank()) throw ApiException.badRequest("No database selected. Choose a database in the top bar first.");
         if (databaseOverride != null && !databaseOverride.isBlank()) policy.validateDatabase(databaseOverride);
         int max = s.maxResultRows();
         int fetch = max + 1;
@@ -334,6 +335,7 @@ public class MongoExecutionService {
     /** Collections of the active MongoDB connection's database (or the given one). */
     public List<String> collections(String database) {
         String db = database == null || database.isBlank() ? provider.defaultDatabase() : database;
+        if (db == null || db.isBlank()) throw ApiException.badRequest("No database selected. Choose a database in the top bar first.");
         if (database != null && !database.isBlank()) policy.validateDatabase(database);
         try {
             List<String> out = new ArrayList<>();

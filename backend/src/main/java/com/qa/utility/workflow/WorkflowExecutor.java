@@ -160,7 +160,7 @@ public class WorkflowExecutor {
     private RunContext create(long workflowId, Map<String, String> inputs) {
         Workflow w = workflows.get(workflowId);
         ConnectionProfile conn = provider.activeProfile().or(() -> mongoProvider.activeProfile())
-                .orElseThrow(() -> ApiException.conflict("Not connected. Connect to a QA/UAT database before running a workflow."));
+                .orElseThrow(() -> ApiException.conflict("Not connected. Connect to a QA, Staging or Development database before running a workflow."));
         Map<String, String> in = new LinkedHashMap<>();
         for (WorkflowInput wi : w.inputs()) {
             String v = inputs == null ? null : inputs.get(wi.name());

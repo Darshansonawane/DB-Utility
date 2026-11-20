@@ -67,6 +67,16 @@ class MultiDatabaseIntegrationTest {
         }
     }
 
+    static final String LIMITED_PW = "Lim-Test-Pw-1", NODB_PW = "Nodb-Test-Pw-1", NOROLE_PW = "Nor-Test-Pw-1";
+
+    ConnectionView mysqlAs(String name, String user, String pw) {
+        return connections.create(new ConnectionRequest(name + u, "QA", "MYSQL", "127.0.0.1", Integer.parseInt(MYSQL_PORT), null, user, pw, false, null, null, false, "Darshan", ACCESS, null));
+    }
+
+    ConnectionView mongoAs(String name, String user, String pw) {
+        return connections.create(new ConnectionRequest(name + u, "QA", "MONGODB", "127.0.0.1", Integer.parseInt(MONGO_PORT), null, user, pw, false, null, "admin", false, "Darshan", ACCESS, null));
+    }
+
     ConnectionView mysql(String name) {
         return connections.create(new ConnectionRequest(name + u, "QA", "MYSQL", "127.0.0.1", Integer.parseInt(MYSQL_PORT), "bank_wallet", MYSQL_USER, MYSQL_PW,
                 false, null, null, false, "Darshan", ACCESS, null));
@@ -95,7 +105,7 @@ class MultiDatabaseIntegrationTest {
     @Test
     void mysqlAndMongoStayConnectedTogetherAndEachOneWorks() {
         SessionContext.set("darshan-" + u);
-        ConnectionView my = mysql("wallet-mysql-"), mHost = mongoHost("customers-host-", "UAT", MONGO_PW), mUri = mongoUri("customers-uri-", "DEV");
+        ConnectionView my = mysql("wallet-mysql-"), mHost = mongoHost("customers-host-", "STAGING", MONGO_PW), mUri = mongoUri("customers-uri-", "DEV");
         assertEquals("DEV", mUri.environment());
         assertTrue(connections.testSaved(my.id(), ACCESS).serverVersion().startsWith("MySQL"));
         assertTrue(connections.testSaved(mHost.id(), ACCESS).serverVersion().startsWith("MongoDB"));
@@ -172,7 +182,7 @@ class MultiDatabaseIntegrationTest {
     @Test
     void editingOrDeletingOneConnectionLeavesTheOthersConnected() {
         SessionContext.set("s-" + u);
-        ConnectionView a = mongoUri("edit-a-", "QA"), b = mongoUri("edit-b-", "UAT"), c = mysql("edit-c-");
+        ConnectionView a = mongoUri("edit-a-", "QA"), b = mongoUri("edit-b-", "STAGING"), c = mysql("edit-c-");
         for (ConnectionView v : List.of(a, b, c)) connections.connect(v.id(), ACCESS);
         assertThrows(ApiException.class, () -> connections.update(a.id(), new ConnectionRequest("hijack" + u, "QA", "MONGODB", null, 0, null, null, null, true, null, null, false, null, "nope-nope", null)));
         assertEquals(3, connections.statuses().size(), "a refused edit changes nothing");
@@ -303,5 +313,105 @@ class MultiDatabaseIntegrationTest {
         }
         assertEquals("SUCCESS", done.status(), "the background thread ran on the starting session's connection");
         as("intruder-" + u, () -> assertThrows(ApiException.class, () -> executor.get(started.runId())));
+    }
+
+    // ------------------------------------------------------------------ database discovery and switching
+
+    @Test
+    void mysqlNeedsNoDatabaseDiscoversWhatTheUserMayAccessAndSwitchesWithoutReconnecting() {
+        SessionContext.set("s-" + u);
+        ConnectionView c = mysqlAs("nodb-mysql-", MYSQL_USER, MYSQL_PW);
+        assertNull(c.databaseName(), "created without a database name");
+        connections.connect(c.id(), ACCESS);
+        assertNull(connections.status().databaseName());
+
+        var list = connections.databases(DbType.MYSQL);
+        assertTrue(list.databases().containsAll(List.of("bank_wallet", "bank_audit", "bank_other")));
+        assertFalse(list.databases().contains("prod_ledger"), "production-looking names are hidden even though the user can access them");
+        assertFalse(list.databases().stream().anyMatch(n -> n.equals("mysql") || n.equals("information_schema")));
+        assertNull(list.selected());
+
+        SavedQuery unqualified = library.create(new SavedQuery(null, "unq-" + u, null, "it", "SELECT name FROM customers WHERE customer_id = ?", QueryType.READ,
+                List.of(), true, List.of(p("customer_id", ParamType.STRING))));
+        ApiException none = assertThrows(ApiException.class, () -> library.execute(unqualified.id(), Map.of("customer_id", "C100"), null));
+        assertTrue(none.getMessage().startsWith("No database selected"), none.getMessage());
+        SavedQuery qualified = library.create(new SavedQuery(null, "qual-" + u, null, "it", "SELECT name FROM bank_wallet.customers WHERE customer_id = ?", QueryType.READ,
+                List.of(), true, List.of(p("customer_id", ParamType.STRING))));
+        assertEquals("Asha", library.execute(qualified.id(), Map.of("customer_id", "C100"), null).rows().get(0).get(0));
+
+        assertEquals("bank_wallet", connections.useDatabase("bank_wallet", DbType.MYSQL).databaseName());
+        assertEquals("Asha", library.execute(unqualified.id(), Map.of("customer_id", "C100"), null).rows().get(0).get(0));
+        SavedQuery audit = library.create(new SavedQuery(null, "audit-" + u, null, "it", "SELECT what FROM events WHERE id = ?", QueryType.READ,
+                List.of(), true, List.of(p("id", ParamType.INTEGER))));
+        connections.useDatabase("bank_audit", DbType.MYSQL);
+        assertEquals("login", library.execute(audit.id(), Map.of("id", "1"), null).rows().get(0).get(0), "switched on the same connection, no reconnect");
+        assertEquals(1, connections.statuses().size());
+        assertEquals("bank_audit", connections.status().databaseName());
+
+        assertEquals(400, assertThrows(ApiException.class, () -> connections.useDatabase("bank_missing", DbType.MYSQL)).status().value());
+        assertEquals(400, assertThrows(ApiException.class, () -> connections.useDatabase("prod_ledger", DbType.MYSQL)).status().value(), "blocked name, though the user has access");
+        assertEquals("bank_audit", connections.status().databaseName(), "a refused switch changes nothing");
+    }
+
+    @Test
+    void mongoNeedsNoDatabaseDiscoversAuthorizedOnesAndSwitchesIndependently() {
+        SessionContext.set("s-" + u);
+        ConnectionView my = mysql("mix-my-"), mongo = mongoAs("nodb-mongo-", MONGO_USER, MONGO_PW);
+        assertNull(mongo.databaseName());
+        connections.connect(my.id(), ACCESS);
+        connections.connect(mongo.id(), ACCESS);
+
+        var list = connections.databases(DbType.MONGODB);
+        assertEquals(List.of("qa_customers", "qa_other"), list.databases(), "only databases this user holds privileges on; system databases hidden");
+        assertFalse(list.restricted());
+        assertNull(list.selected());
+
+        SavedQuery customers = mongoQuery("nd-cust-", "{\"collection\":\"customers\",\"filter\":{\"customerId\":\"?\"},\"projection\":{\"_id\":0,\"name\":1}}", p("customerId", ParamType.STRING));
+        ApiException none = assertThrows(ApiException.class, () -> library.execute(customers.id(), Map.of("customerId", "C100"), null));
+        assertTrue(none.getMessage().startsWith("No database selected"), none.getMessage());
+        assertEquals(List.of("accounts", "bulk", "customers"), connections.useDatabase("qa_customers", DbType.MONGODB) != null ? mongoCollections() : List.of());
+        assertEquals("Asha", library.execute(customers.id(), Map.of("customerId", "C100"), null).rows().get(0).get(0));
+
+        SavedQuery parts = mongoQuery("nd-parts-", "{\"collection\":\"parts\",\"projection\":{\"_id\":0}}");
+        connections.useDatabase("qa_other", DbType.MONGODB);
+        assertEquals(1, library.execute(parts.id(), Map.of(), null).rowCount());
+
+        connections.useDatabase("bank_wallet", DbType.MYSQL);
+        assertEquals("qa_other", connections.statuses().stream().filter(s -> s.dbType().equals("MONGODB")).findFirst().get().databaseName(), "switching MySQL does not move MongoDB");
+        assertEquals("bank_wallet", connections.status().databaseName());
+        assertEquals(400, assertThrows(ApiException.class, () -> connections.useDatabase("qa_secret", DbType.MONGODB)).status().value());
+        assertEquals(2, connections.statuses().size(), "no connection was dropped by any of this");
+    }
+
+    @Autowired com.qa.utility.service.MongoExecutionService mongoExec;
+
+    List<String> mongoCollections() {
+        return mongoExec.collections(null);
+    }
+
+    @Test
+    void discoveryRespectsTheDatabaseUsersPermissions() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getenv("MONGO_TEST_LIMITED_USER") != null);
+        SessionContext.set("s-" + u);
+        ConnectionView my = mysqlAs("lim-my-", "limited", LIMITED_PW), nodb = mysqlAs("nodb-my-", "nodb", NODB_PW);
+        ConnectionView mg = mongoAs("lim-mongo-", "qa_limited", LIMITED_PW), norole = mongoAs("norole-mongo-", "qa_norole", NOROLE_PW);
+        for (ConnectionView v : List.of(my, nodb, mg, norole)) connections.connect(v.id(), ACCESS);
+
+        connections.activate(my.id());
+        assertEquals(List.of("bank_wallet"), connections.databases(DbType.MYSQL).databases());
+        assertEquals(400, assertThrows(ApiException.class, () -> connections.useDatabase("bank_audit", DbType.MYSQL)).status().value());
+
+        connections.activate(nodb.id());
+        var empty = connections.databases(DbType.MYSQL);
+        assertTrue(empty.databases().isEmpty() && empty.message() != null, "no accessible databases: explained, not an error");
+
+        connections.activate(mg.id());
+        assertEquals(List.of("qa_customers"), connections.databases(DbType.MONGODB).databases());
+        assertEquals(400, assertThrows(ApiException.class, () -> connections.useDatabase("qa_other", DbType.MONGODB)).status().value());
+        connections.useDatabase("qa_customers", DbType.MONGODB);
+        // the server enforces the permission regardless of what the UI offers: the read-only user cannot see another database
+        connections.activate(norole.id());
+        assertTrue(connections.databases(DbType.MONGODB).databases().isEmpty());
+        assertEquals(4, connections.statuses().size());
     }
 }

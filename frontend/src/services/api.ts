@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type {
-  AppSettings, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
+  AppSettings, DbType, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
   SqlAnalysis, StatusView, ApiRequestDef, ApiRunResult, ApiWorkflowDef, ApiRunView, Folder, FolderKind, VariableBody, PreviewResult, ParamPreview, InfoItem, InfoSummary, RunSummary, WorkflowReport, OverviewRow, VariableView, DatabaseList, TestResult, Workflow, WritePreview,
 } from '../types';
 
@@ -15,6 +15,11 @@ export function errMsg(e: unknown): string {
     return `Request failed (${e.response.status})`;
   }
   return e instanceof Error ? e.message : String(e);
+}
+
+/** HTTP status of a failed request, if there was a response. */
+export function errStatus(e: unknown): number | undefined {
+  return axios.isAxiosError(e) ? e.response?.status : undefined;
 }
 
 const d = <T,>(p: Promise<{ data: T }>) => p.then((r) => r.data);
@@ -77,8 +82,8 @@ export const api = {
   saveInfoItem: (i: InfoItem) => d<InfoItem>(i.id ? http.put(`/info/items/${i.id}`, i) : http.post('/info/items', i)),
   moveInfoItem: (id: number, folderId: number) => d<void>(http.put(`/info/items/${id}/folder`, { folderId })),
   deleteInfoItem: (id: number) => d<void>(http.delete(`/info/items/${id}`)),
-  databases: () => d<DatabaseList>(http.get('/connections/databases')),
-  useDatabase: (name: string) => d<StatusView>(http.post('/connections/database', { name })),
+  databases: (dbType: DbType = 'MYSQL') => d<DatabaseList>(http.get('/connections/databases', { params: { dbType } })),
+  useDatabase: (name: string, dbType: DbType = 'MYSQL') => d<StatusView>(http.post('/connections/database', { name, dbType })),
 
   openVpn: () => d<{ opened: boolean; app: string }>(http.post('/vpn/open')),
   reachable: (id: number) => d<{ reachable: boolean; ms?: number; message?: string }>(http.get(`/vpn/reachable/${id}`)),

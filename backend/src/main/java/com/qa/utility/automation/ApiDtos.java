@@ -186,7 +186,7 @@ public final class ApiDtos {
                               Instant lastRunAt) {
     }
 
-    /** scope: GLOBAL (everywhere) | FOLDER (only runs whose request/workflow lives in that folder tree) | ENVIRONMENT (QA or UAT value). */
+    /** scope: GLOBAL (everywhere) | FOLDER (only runs whose request/workflow lives in that folder tree) | ENVIRONMENT (QA, Staging or Development value). */
     public record VariableView(Long id, String name, String value, boolean secret, String source, String sourceType, String sourceName,
                                String scope, long folderId, String folderPath, String environment, Object updatedAt) {
     }

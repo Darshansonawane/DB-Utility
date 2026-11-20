@@ -22,7 +22,7 @@ public class SessionTargetProvider implements TargetDataSourceProvider {
     @Override
     public DataSource current() {
         return registry.active(DbType.MYSQL).map(c -> ((MySqlLive) c).dataSource())
-                .orElseThrow(() -> ApiException.conflict("Not connected. Open Database Connections and connect to a QA/UAT MySQL profile first."));
+                .orElseThrow(() -> ApiException.conflict("Not connected. Open Database Connections and connect to a MySQL connection first."));
     }
 
     @Override

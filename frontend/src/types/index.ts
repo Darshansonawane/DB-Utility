@@ -60,14 +60,14 @@ export interface ParamValue { type: ParamType; value: string }
 
 export type DbType = 'MYSQL' | 'MONGODB';
 export interface ConnectionView {
-  id: number; name: string; environment: string; dbType: DbType; host: string; port: number; databaseName: string;
+  id: number; name: string; environment: string; dbType: DbType; host: string; port: number; databaseName?: string | null;
   username?: string | null; authDatabase?: string | null; tls: boolean; usesUri: boolean; ownerName?: string | null;
   /** false for connections created before access passwords existed: one must be chosen before use */
   passwordProtected: boolean; connected: boolean; active: boolean;
 }
 /** Every secret is write-only: sent to the backend, never returned. */
 export interface ConnectionRequest {
-  name: string; environment: string; dbType: DbType; host: string; port: number; databaseName: string; username: string; password?: string;
+  name: string; environment: string; dbType: DbType; host: string; port: number; databaseName?: string; username: string; password?: string;
   useUri: boolean; uri?: string; authDatabase?: string; tls: boolean; ownerName?: string;
   /** on create: the password people must enter to use the connection; on edit: its CURRENT access password */
   accessPassword?: string; newAccessPassword?: string;
@@ -77,7 +77,8 @@ export interface StatusView {
   connected: boolean; profileId?: number; connectionName?: string; environment?: string;
   host?: string; databaseName?: string; latencyMs?: number; message: string; dbType?: DbType; active?: boolean;
 }
-export interface DatabaseList { databases: string[]; selected: string }
+/** restricted: the server would not list databases for this user, so the list may be incomplete and a name can be typed. */
+export interface DatabaseList { databases: string[]; selected?: string | null; restricted: boolean; message?: string | null }
 export interface AppSettings {
   readOnlyMode: boolean; maxResultRows: number; queryTimeoutSeconds: number; maxAffectedRows: number;
   adHocWritesEnabled: boolean; maskSensitiveData: boolean;

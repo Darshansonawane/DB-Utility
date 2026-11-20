@@ -1,12 +1,12 @@
 # Security guide
 
-This tool changes banking QA/UAT data. These controls exist, and so do their limits.
+This tool changes banking QA, Staging and Development data. These controls exist, and so do their limits.
 
 ## Controls implemented
 
 | Control | How |
 |---|---|
-| QA/UAT only | `qa-utility.allowed-environments` (default `QA,UAT`). Host/database names containing `prod`, `prd`, `production`, `live` (`qa-utility.blocked-host-patterns`) are rejected. This is a name-based guard, not proof: also use accounts that exist only in QA/UAT. |
+| QA / Staging / Development only | `qa-utility.allowed-environments` (default `QA,STAGING,DEV`; the old name UAT is still accepted and means Staging). Host/database names containing `prod`, `prd`, `production`, `live` (`qa-utility.blocked-host-patterns`) are rejected. This is a name-based guard, not proof: also use accounts that exist only in QA/UAT. |
 | No VPN/firewall bypass | The backend opens a normal JDBC connection from your Mac. If the VPN is down, the connection fails. |
 | Credentials stay on the backend | Database passwords and MongoDB connection strings are **envelope-encrypted** (AES-256-GCM: a fresh random data key per value, wrapped by the master key; format `v2:`). Master key: `QA_UTILITY_MASTER_KEY` env var, or a generated `~/.qa-database-utility/master.key` (mode 0600). Secrets are never returned by any API and never written to logs, history or audit. Values stored by older versions stay readable. To use a managed key service, replace `CryptoService.wrap/unwrap`. |
 | Per-connection access password | Every connection has its own **access password**, chosen when it is created (separate from the database username/password). It is required to connect to, test, edit or delete that connection. Only a salted PBKDF2-HMAC-SHA256 hash (210k iterations) is stored. 5 wrong guesses lock that connection for 60 s. Connections created before this existed must get an access password the first time someone opens them. |

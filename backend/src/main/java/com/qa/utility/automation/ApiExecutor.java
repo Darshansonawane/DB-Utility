@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Sends one API request: resolves {{variables}}, enforces the QA/UAT URL policy, never follows redirects,
+ * Sends one API request: resolves {{variables}}, enforces the QA/Staging/Development URL policy, never follows redirects,
  * caps the response size, then extracts values from the response into variables.
  */
 @Service
@@ -214,7 +214,7 @@ public class ApiExecutor {
         audit.record("API_CALL", null, method + " " + u, null, status, ok ? "SUCCESS" : "FAILED", detail);
     }
 
-    /** QA/UAT policy: http(s) only, no production-looking hosts, no link-local / metadata addresses. */
+    /** Environment policy: http(s) only, no production-looking hosts, no link-local / metadata addresses. */
     void checkUrl(String url) {
         URI u;
         try {
@@ -229,7 +229,7 @@ public class ApiExecutor {
         String lower = host.toLowerCase(Locale.ROOT);
         for (String p : props.blockedHostPatterns()) {
             if (lower.contains(p.toLowerCase(Locale.ROOT))) {
-                throw ApiException.badRequest("Host matches blocked pattern '" + p + "'. API automation is restricted to QA/UAT environments.");
+                throw ApiException.badRequest("Host matches blocked pattern '" + p + "'. API automation is restricted to QA, Staging and Development environments.");
             }
         }
         try {

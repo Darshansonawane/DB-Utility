@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Primary;
 import javax.sql.DataSource;
 import java.util.Optional;
 
-/** Replaces the live QA/UAT connection with an isolated in-memory H2 database. Never touches a company database. */
+/** Replaces the live QA/Staging connection with an isolated in-memory H2 database. Never touches a company database. */
 @TestConfiguration
 public class TestTargetConfig {
     public static class MutableProvider implements TargetDataSourceProvider {

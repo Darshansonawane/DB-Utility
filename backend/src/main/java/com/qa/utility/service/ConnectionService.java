@@ -185,43 +185,59 @@ public class ConnectionService {
     private StatusView statusOf(LiveConnection c) {
         ConnectionProfile p = c.profile();
         boolean active = registry.isActive(p.id());
+        String db = c.selectedDatabase();
         try {
             long ms = c.ping();
-            return new StatusView(true, p.id(), p.name(), p.environment(), p.host(), p.databaseName(), ms, "Connected", p.dbType().name(), active);
+            return new StatusView(true, p.id(), p.name(), p.environment(), p.host(), db, ms, "Connected", p.dbType().name(), active);
         } catch (Exception e) {
-            return new StatusView(false, p.id(), p.name(), p.environment(), p.host(), p.databaseName(), null,
+            return new StatusView(false, p.id(), p.name(), p.environment(), p.host(), db, null,
                     "Connection lost: " + Errors.root(e), p.dbType().name(), active);
         }
     }
 
     // ------------------------------------------------------------------ MySQL database switching
 
-    private MySqlLive activeMySql() {
-        return registry.active(DbType.MYSQL).map(c -> (MySqlLive) c)
-                .orElseThrow(() -> ApiException.conflict("Not connected. Connect to a MySQL profile first."));
+    private LiveConnection activeOf(DbType type) {
+        return registry.active(type).orElseThrow(() -> ApiException.conflict(
+                "Not connected. Connect to a " + (type == DbType.MONGODB ? "MongoDB" : "MySQL") + " connection first."));
     }
 
-    /** Databases visible to the active MySQL connection's user (system schemas hidden) plus the one currently selected. */
+    /**
+     * Databases the active connection of this type may access, discovered from the server with the connection's own database user
+     * (nothing is bypassed). Names that look like production are hidden, as everywhere else in this tool.
+     */
+    public DatabaseList databases(DbType type) {
+        LiveConnection live = activeOf(type);
+        LiveConnection.Discovery d = live.discoverDatabases();
+        List<String> names = new ArrayList<>(d.names().stream().filter(policy::isUsableDatabase).toList());
+        String selected = live.selectedDatabase();
+        if (selected != null && !names.contains(selected)) names.add(0, selected);
+        return new DatabaseList(names, selected, d.restricted(), d.message());
+    }
+
     public DatabaseList databases() {
-        MySqlLive live = activeMySql();
-        List<String> names = new JdbcTemplate(live.dataSource()).queryForList("SHOW DATABASES", String.class).stream()
-                .filter(n -> !SYSTEM_SCHEMAS.contains(n.toLowerCase(Locale.ROOT))).sorted(String.CASE_INSENSITIVE_ORDER).toList();
-        return new DatabaseList(names, live.profile().databaseName());
+        return databases(DbType.MYSQL);
     }
 
-    public StatusView useDatabase(String name) {
-        MySqlLive live = activeMySql();
+    public StatusView useDatabase(String name, DbType type) {
+        LiveConnection live = activeOf(type);
         ConnectionProfile p = live.profile();
-        if (!databases().databases().contains(name)) throw ApiException.badRequest("Database '" + name + "' is not visible to this user");
-        policy.validate(p.environment(), p.host(), p.port(), name);
+        policy.validateDatabase(name);
+        LiveConnection.Discovery d = live.discoverDatabases();
+        // When the server will not list databases for this user we cannot pre-check the name; the server still enforces permissions.
+        if (!d.restricted() && !d.names().contains(name)) throw ApiException.badRequest("Database '" + name + "' is not accessible to this database user");
         try {
-            live.switchDatabase(name);
+            live.selectDatabase(name);
         } catch (RuntimeException e) {
             audit.record("SWITCH_DATABASE", p, null, null, null, "FAILED", e.getMessage());
             throw ApiException.badRequest("Could not switch database: " + Errors.root(e));
         }
-        audit.record("SWITCH_DATABASE", live.profile(), null, null, null, "SUCCESS", null);
+        audit.record("SWITCH_DATABASE", live.profile(), null, null, null, "SUCCESS", name);
         return statusOf(live);
+    }
+
+    public StatusView useDatabase(String name) {
+        return useDatabase(name, DbType.MYSQL);
     }
 
     // ------------------------------------------------------------------ internals
@@ -272,9 +288,10 @@ public class ConnectionService {
         String name = r.name().trim();
         String owner = blank(r.ownerName()) ? (old == null ? null : old.ownerName()) : r.ownerName().trim();
         if (type == DbType.MYSQL) {
-            if (blank(r.host()) || blank(r.databaseName()) || blank(r.username())) throw ApiException.badRequest("Host, database name and username are required");
+            if (blank(r.host()) || blank(r.username())) throw ApiException.badRequest("Host and username are required");
             int port = r.port() == 0 ? 3306 : r.port();
-            policy.validate(env, r.host().trim(), port, r.databaseName().trim());
+            String db = blank(r.databaseName()) ? null : r.databaseName().trim(); // optional: databases are discovered after connecting
+            policy.validate(env, r.host().trim(), port, db);
             String pw;
             if (blank(r.password())) {
                 if (old == null || old.passwordEncrypted() == null) throw ApiException.badRequest("Password is required");
@@ -282,7 +299,7 @@ public class ConnectionService {
             } else {
                 pw = crypto.encrypt(r.password());
             }
-            return new ConnectionProfile(id, name, env, r.host().trim(), port, r.databaseName().trim(), r.username(), pw, DbType.MYSQL, owner, accessHash, null, null, false);
+            return new ConnectionProfile(id, name, env, r.host().trim(), port, db, r.username(), pw, DbType.MYSQL, owner, accessHash, null, null, false);
         }
         // MongoDB
         if (r.useUri()) {
@@ -296,8 +313,7 @@ public class ConnectionService {
                 uriEnc = crypto.encrypt(uri);
             }
             ConnectionString cs = parseUri(uri);
-            String db = blank(r.databaseName()) ? cs.getDatabase() : r.databaseName().trim();
-            if (blank(db)) throw ApiException.badRequest("Database name is required (put it in the connection string or the Database name field)");
+            String db = blank(r.databaseName()) ? (blank(cs.getDatabase()) ? null : cs.getDatabase()) : r.databaseName().trim();
             String firstHost = null;
             int firstPort = 27017;
             for (String h : cs.getHosts()) {
@@ -322,16 +338,17 @@ public class ConnectionService {
             return new ConnectionProfile(id, name, env, firstHost, firstPort, db, cs.getUsername(), null, DbType.MONGODB, owner, accessHash, uriEnc,
                     blank(r.authDatabase()) ? null : r.authDatabase().trim(), tls);
         }
-        if (blank(r.host()) || blank(r.databaseName())) throw ApiException.badRequest("Host and database name are required");
+        if (blank(r.host())) throw ApiException.badRequest("Host is required");
         int port = r.port() == 0 ? 27017 : r.port();
-        policy.validate(env, r.host().trim(), port, r.databaseName().trim());
+        String db = blank(r.databaseName()) ? null : r.databaseName().trim();
+        policy.validate(env, r.host().trim(), port, db);
         String pw = null;
         if (!blank(r.username())) {
             if (!blank(r.password())) pw = crypto.encrypt(r.password());
             else if (old != null && old.passwordEncrypted() != null) pw = old.passwordEncrypted();
             else throw ApiException.badRequest("Password is required when a username is given");
         }
-        return new ConnectionProfile(id, name, env, r.host().trim(), port, r.databaseName().trim(), blank(r.username()) ? null : r.username(), pw,
+        return new ConnectionProfile(id, name, env, r.host().trim(), port, db, blank(r.username()) ? null : r.username(), pw,
                 DbType.MONGODB, owner, accessHash, null, blank(r.authDatabase()) ? null : r.authDatabase().trim(), r.tls());
     }
 

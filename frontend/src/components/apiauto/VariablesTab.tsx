@@ -53,7 +53,7 @@ function VariableDialog({ initial, folders, defaultFolder, onClose, onSaved }: {
           </TextField>
           {scope === 'ENVIRONMENT' && (
             <TextField size="small" select label="Environment" value={env} onChange={(e) => setEnv(e.target.value)}>
-              <MenuItem value="QA">QA</MenuItem><MenuItem value="UAT">UAT</MenuItem>
+              <MenuItem value="QA">QA</MenuItem><MenuItem value="STAGING">Staging</MenuItem><MenuItem value="DEV">Development</MenuItem>
             </TextField>
           )}
           <FolderSelect folders={folders} value={folderId} onChange={setFolderId} label={scope === 'FOLDER' ? 'Folder (required)' : 'Folder (organisation only)'} />
@@ -100,7 +100,7 @@ export default function VariablesTab({ vars, folders, reload, reloadFolders }: {
             <Typography variant="body2">Active environment:</Typography>
             <ToggleButtonGroup size="small" exclusive value={env} aria-label="active environment"
               onChange={async (_, v) => { if (v === null) return; const r = await run(() => api.setActiveEnvironment(v)); if (r) { setEnv(r.environment); reload(); } }}>
-              <ToggleButton value="">None</ToggleButton><ToggleButton value="QA">QA</ToggleButton><ToggleButton value="UAT">UAT</ToggleButton>
+              <ToggleButton value="">None</ToggleButton><ToggleButton value="QA">QA</ToggleButton><ToggleButton value="STAGING">Staging</ToggleButton><ToggleButton value="DEV">Development</ToggleButton>
             </ToggleButtonGroup>
           </Stack>
           <TextField size="small" placeholder="Search variables" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ ml: 'auto', minWidth: 220 }}

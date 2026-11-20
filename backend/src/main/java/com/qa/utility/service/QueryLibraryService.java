@@ -111,7 +111,7 @@ public class QueryLibraryService {
             if (!names.add(qp.name().toLowerCase())) throw ApiException.badRequest("Duplicate parameter name '" + qp.name() + "'");
         }
         return new SavedQuery(q.id(), q.name().trim(), q.description(), q.category(), p.sql().equals(q.sql().trim()) ? q.sql().trim() : q.sql().trim(),
-                actual, q.environments().stream().map(e -> e.trim().toUpperCase()).filter(e -> !e.isEmpty()).toList(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine());
+                actual, q.environments().stream().map(Environments::canonical).filter(e -> !e.isEmpty()).distinct().toList(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine());
     }
 
     /** MongoDB queries are JSON specs and always read-only; "?" strings inside the JSON are the parameters. */
@@ -127,7 +127,7 @@ public class QueryLibraryService {
             if (!names.add(qp.name().toLowerCase())) throw ApiException.badRequest("Duplicate parameter name '" + qp.name() + "'");
         }
         return new SavedQuery(q.id(), q.name().trim(), q.description(), q.category(), q.sql().trim(), QueryType.READ,
-                q.environments().stream().map(e -> e.trim().toUpperCase()).filter(e -> !e.isEmpty()).toList(), q.enabled(), q.databaseName(),
+                q.environments().stream().map(Environments::canonical).filter(e -> !e.isEmpty()).distinct().toList(), q.enabled(), q.databaseName(),
                 q.parameters(), q.extractions(), DbType.MONGODB);
     }
 
@@ -280,7 +280,7 @@ public class QueryLibraryService {
         if (!q.environments().isEmpty()) {
             String env = activeProfile(q.engine()).map(ConnectionProfile::environment)
                     .orElseThrow(() -> ApiException.conflict("Not connected"));
-            if (q.environments().stream().noneMatch(env::equalsIgnoreCase)) {
+            if (q.environments().stream().map(Environments::canonical).noneMatch(Environments.canonical(env)::equals)) {
                 throw ApiException.forbidden("Query '" + q.name() + "' is restricted to " + q.environments() + " but the active environment is " + env);
             }
         }

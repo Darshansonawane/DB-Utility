@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS api_variable (
   scope VARCHAR(12) NOT NULL DEFAULT 'GLOBAL',  -- GLOBAL | FOLDER | ENVIRONMENT
   scope_key VARCHAR(40) NOT NULL DEFAULT '',    -- '' | F<folderId> | E<environment>  (makes (name, scope, scope_key) unique)
   folder_id BIGINT NOT NULL DEFAULT 0,          -- organising folder; for FOLDER scope also the visibility folder
-  environment VARCHAR(10) NOT NULL DEFAULT '',  -- QA | UAT for ENVIRONMENT scope
+  environment VARCHAR(10) NOT NULL DEFAULT '',  -- QA | STAGING | DEV for ENVIRONMENT scope
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -310,3 +310,15 @@ ALTER TABLE connection_profile ALTER COLUMN username SET NULL;
 
 -- Saved queries can target MongoDB: sql_text then holds a JSON query spec.
 ALTER TABLE saved_query ADD COLUMN IF NOT EXISTS engine VARCHAR(10) DEFAULT 'MYSQL' NOT NULL;
+
+-- The database is chosen after connecting (discovered from the server), so a connection no longer needs one.
+ALTER TABLE connection_profile ALTER COLUMN database_name SET NULL;
+
+-- UAT is now called Staging (idempotent: safe to run on every start). Credentials and settings are untouched.
+UPDATE connection_profile SET environment = 'STAGING' WHERE environment = 'UAT';
+UPDATE saved_query SET environments = REPLACE(environments, 'UAT', 'STAGING') WHERE environments LIKE '%UAT%';
+UPDATE api_variable SET environment = 'STAGING', scope_key = 'ESTAGING' WHERE environment = 'UAT';
+UPDATE app_setting SET setting_value = 'STAGING' WHERE setting_key = 'automation.activeEnvironment' AND setting_value = 'UAT';
+UPDATE execution_history SET environment = 'STAGING' WHERE environment = 'UAT';
+UPDATE workflow_run SET environment = 'STAGING' WHERE environment = 'UAT';
+UPDATE audit_log SET environment = 'STAGING' WHERE environment = 'UAT';

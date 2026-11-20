@@ -18,6 +18,8 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 - `DbAdapter` (one per type) opens real connections. `ConnectionRegistry` holds them keyed by (browser session, profile): each has its own pool/client, so one failing or being closed never affects another. The session id is an anonymous HttpOnly cookie (`SessionFilter`/`SessionContext`); background threads (workflows) re-bind the starting session.
 - Per session, one connection per type is **active**: `SessionTargetProvider` (MySQL) and `SessionMongoProvider` (MongoDB) give the SQL engine, workflows and metadata tools that connection. `Connect` makes the new connection active; `Use` switches without disconnecting anything.
 - Editing or deleting a connection closes only that connection (in every session).
+- **Database discovery:** a connection needs no database name. After connecting, `LiveConnection.discoverDatabases()` asks the server what that connection's own database user may access (MySQL `SHOW DATABASES`; MongoDB `listDatabases` with `authorizedDatabases`), hides system schemas and production-looking names, and the user picks one (`selectDatabase`). If a server refuses to list databases, the list is flagged `restricted` and a name can be typed; the server still enforces permissions on every query.
+- Environments are QA, STAGING (formerly UAT, migrated at startup) and DEV (shown as Development).
 - Saved queries have an `engine`. `MYSQL`: SQL as before. `MONGODB`: `sql` holds a JSON spec run by `MongoExecutionService` (read-only; "?" strings are typed parameters). Both return the same `QueryResult`, so forms, workflows, outputs and variable extraction are unchanged.
 
 ## Why there are no per-query endpoints or components
@@ -35,6 +37,7 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 | Area | Endpoints |
 |---|---|
 | Connections | `GET/POST /api/connections`, `PUT/DELETE /api/connections/{id}`, `POST /api/connections/test`, `/{id}/test`, `/{id}/connect` (body `{accessPassword}`), `/{id}/disconnect`, `/{id}/activate`, `/{id}/access-password` (legacy connections only), `/disconnect` (all of this session), `GET /status` (active MySQL), `GET /statuses` (every live connection) |
+| Databases | `GET /api/connections/databases?dbType=MYSQL\|MONGODB` (what the active connection's database user may access), `POST /api/connections/database` `{name, dbType}` (switch, no reconnect) |
 | MongoDB | `POST /api/mongo/analyze` (validate a JSON query, suggest parameters), `GET /api/mongo/collections` |
 | SQL | `POST /api/sql/analyze`, `/execute`, `/preview` |
 | Query library | `GET/POST /api/queries`, `GET/PUT/DELETE /{id}`, `/{id}/duplicate`, `/{id}/enabled`, `/{id}/preview`, `/{id}/execute`, `/categories` |

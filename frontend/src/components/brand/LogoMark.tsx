@@ -2,8 +2,8 @@ import { useTheme } from '@mui/material';
 
 interface Props { size?: number; title?: string }
 
-/** FlowNexus mark: two source nodes (APIs) flowing into a database cylinder. Adapts to light/dark. */
-export default function LogoMark({ size = 32, title = 'FlowNexus' }: Props) {
+/** DB-Utility mark: two source nodes (APIs) flowing into a database cylinder. Adapts to light/dark. */
+export default function LogoMark({ size = 32, title = 'DB-Utility' }: Props) {
   const dark = useTheme().palette.mode === 'dark';
   const line = dark ? '#7FB0FF' : '#0A1F44';
   const node1 = dark ? '#FFFFFF' : '#0B3A6F';

@@ -33,6 +33,31 @@ public final class MySqlLive implements LiveConnection {
         return DbType.MYSQL;
     }
 
+    private static final java.util.Set<String> SYSTEM = java.util.Set.of("information_schema", "mysql", "performance_schema", "sys");
+
+    /** SHOW DATABASES only returns what this MySQL user has privileges on. */
+    @Override
+    public Discovery discoverDatabases() {
+        try {
+            java.util.List<String> names = new org.springframework.jdbc.core.JdbcTemplate(pool).queryForList("SHOW DATABASES", String.class).stream()
+                    .filter(n -> !SYSTEM.contains(n.toLowerCase(java.util.Locale.ROOT))).sorted(String.CASE_INSENSITIVE_ORDER).toList();
+            return new Discovery(names, false, names.isEmpty() ? "This database user has no accessible databases." : null);
+        } catch (RuntimeException e) {
+            return new Discovery(java.util.List.of(), true, "The server did not allow listing databases: " + Errors.root(e));
+        }
+    }
+
+    @Override
+    public String selectedDatabase() {
+        String d = profile.databaseName();
+        return d == null || d.isBlank() ? null : d;
+    }
+
+    @Override
+    public void selectDatabase(String name) {
+        switchDatabase(name);
+    }
+
     @Override
     public long ping() throws Exception {
         long t = System.currentTimeMillis();

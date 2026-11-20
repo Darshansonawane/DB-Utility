@@ -1,0 +1,29 @@
+/* DB-Utility motion: short, subtle, and fully disabled for people who prefer reduced motion. */
+@keyframes dbu-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes dbu-pop { 0% { transform: scale(0.82); opacity: 0.4; } 60% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes dbu-draw { to { stroke-dashoffset: 0; } }
+@keyframes dbu-row-ok { 0% { background-color: rgba(46, 125, 50, 0); box-shadow: inset 3px 0 0 rgba(46, 125, 50, 0); }
+  20% { background-color: rgba(46, 125, 50, 0.20); box-shadow: inset 3px 0 0 rgba(46, 125, 50, 0.9); }
+  100% { background-color: rgba(46, 125, 50, 0); box-shadow: inset 3px 0 0 rgba(46, 125, 50, 0); } }
+@keyframes dbu-row-bad { 0% { background-color: rgba(211, 47, 47, 0); }
+  20% { background-color: rgba(211, 47, 47, 0.16); }
+  100% { background-color: rgba(211, 47, 47, 0); } }
+@keyframes dbu-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-3px); } 40%, 60% { transform: translateX(3px); } }
+
+.page-enter { animation: dbu-enter 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.fade-up { animation: dbu-enter 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+.badge-pop { animation: dbu-pop 380ms cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+.check-draw path { stroke-dasharray: 26; stroke-dashoffset: 26; animation: dbu-draw 360ms ease-out 90ms forwards; }
+.row-success > td { animation: dbu-row-ok 1.7s ease-out; }
+.row-error > td { animation: dbu-row-bad 1.4s ease-out; }
+.shake { animation: dbu-shake 460ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.hover-lift { transition: transform 180ms ease, box-shadow 180ms ease; }
+.hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(10, 31, 68, 0.14); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+  .hover-lift:hover { transform: none; }
+  .check-draw path { stroke-dashoffset: 0; }
+}

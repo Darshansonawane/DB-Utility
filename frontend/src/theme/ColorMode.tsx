@@ -2,19 +2,43 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/material';
 
 export type ColorModePref = 'light' | 'dark' | 'system';
-export const COLOR_MODE_KEY = 'flownexus.colorMode';
+export const COLOR_MODE_KEY = 'dbutility.colorMode';
+const LEGACY_COLOR_MODE_KEY = 'flownexus.colorMode';
 
 export function readStoredMode(): ColorModePref {
   try {
-    const v = localStorage.getItem(COLOR_MODE_KEY);
+    const v = localStorage.getItem(COLOR_MODE_KEY) ?? localStorage.getItem(LEGACY_COLOR_MODE_KEY);
     if (v === 'light' || v === 'dark' || v === 'system') return v;
   } catch { /* storage unavailable */ }
   return 'system';
 }
 
+const EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+
+/** Shared polish: consistent radius, soft shadows, and subtle hover feedback (all of it is switched off for reduced motion in motion.css). */
+const sharedComponents = {
+  MuiButton: {
+    styleOverrides: {
+      root: { borderRadius: 8, transition: `transform 160ms ${EASE}, box-shadow 160ms ${EASE}, background-color 160ms ${EASE}`, '&:active': { transform: 'scale(0.98)' } },
+      contained: { '&:hover': { transform: 'translateY(-1px)', boxShadow: '0 6px 14px rgba(10, 31, 68, 0.22)' } },
+      outlined: { '&:hover': { transform: 'translateY(-1px)' } },
+    },
+  },
+  MuiIconButton: { styleOverrides: { root: { transition: `transform 160ms ${EASE}, background-color 160ms ${EASE}`, '&:hover': { transform: 'scale(1.08)' } } } },
+  MuiCard: { styleOverrides: { root: { borderRadius: 12, boxShadow: '0 1px 2px rgba(10, 31, 68, 0.06), 0 4px 14px rgba(10, 31, 68, 0.06)', transition: `box-shadow 200ms ${EASE}` } } },
+  MuiChip: { styleOverrides: { root: { transition: `background-color 200ms ${EASE}, color 200ms ${EASE}, transform 200ms ${EASE}` } } },
+  MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
+  MuiTableRow: { styleOverrides: { root: { transition: `background-color 160ms ${EASE}` } } },
+  MuiListItemButton: {
+    styleOverrides: { root: { transition: `background-color 160ms ${EASE}, padding-left 160ms ${EASE}`, '&:hover': { backgroundColor: 'rgba(30, 107, 255, 0.08)' } } },
+  },
+  MuiTextField: { defaultProps: { variant: 'outlined' as const } },
+};
+
 const base = {
   shape: { borderRadius: 8 },
-  typography: { fontFamily: 'Inter, -apple-system, "Segoe UI", Roboto, sans-serif', h5: { fontWeight: 700 } },
+  typography: { fontFamily: 'Inter, -apple-system, "Segoe UI", Roboto, sans-serif', h5: { fontWeight: 700 }, h6: { fontWeight: 650 } },
+  components: sharedComponents,
 };
 export const lightTheme = createTheme({
   ...base,
@@ -28,7 +52,7 @@ export const darkTheme = createTheme({
     secondary: { main: '#26c6b5' },
     background: { default: '#07142b', paper: '#0d2147' },
   },
-  components: { MuiAppBar: { styleOverrides: { colorPrimary: { backgroundColor: '#0A1F44', backgroundImage: 'none' } } } },
+  components: { ...sharedComponents, MuiAppBar: { styleOverrides: { colorPrimary: { backgroundColor: '#0A1F44', backgroundImage: 'none' } } } },
 });
 
 interface Ctx { preference: ColorModePref; mode: 'light' | 'dark'; setPreference: (p: ColorModePref) => void; cycle: () => void }

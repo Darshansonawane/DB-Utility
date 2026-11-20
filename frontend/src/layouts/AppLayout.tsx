@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AppBar, MenuItem, Select, Snackbar, Box, Chip, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Toolbar, Tooltip, Typography } from '@mui/material';
+import { useState } from 'react';
+import { AppBar, Box, Chip, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Toolbar, Tooltip, Typography } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -12,50 +12,23 @@ import ApiIcon from '@mui/icons-material/Api';
 import HistoryIcon from '@mui/icons-material/History';
 import SettingsIcon from '@mui/icons-material/Settings';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import { NavLink, Outlet } from 'react-router-dom';
-import { api } from '../services/api';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
 import Logo from '../components/brand/Logo';
 import LogoMark from '../components/brand/LogoMark';
 import ColorModeToggle from '../components/brand/ColorModeToggle';
-
-function envColor(env?: string): 'success' | 'warning' | 'info' {
-  return env === 'UAT' ? 'warning' : env === 'DEV' ? 'info' : 'success';
-}
+import DatabaseSelect from '../components/DatabaseSelect';
+import { envColor, envLabel } from '../utils/environments';
 
 const WIDTH = 240;
 const COLLAPSED_WIDTH = 72;
-const SIDEBAR_KEY = 'flownexus.sidebarCollapsed';
+const SIDEBAR_KEY = 'dbutility.sidebarCollapsed';
 const TAGLINE = 'Connect APIs, databases and business workflows.';
 
 function readCollapsed(): boolean {
   try { return localStorage.getItem(SIDEBAR_KEY) === '1'; } catch { return false; }
 }
 
-function DatabaseSwitcher({ profileId, selected, onChanged }: { profileId?: number; selected?: string; onChanged: () => void }) {
-  const [dbs, setDbs] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const load = () => api.databases().then((r) => setDbs(r.databases)).catch(() => setDbs([]));
-  useEffect(() => { void load(); }, [profileId]);
-  const options = selected && !dbs.includes(selected) ? [selected, ...dbs] : dbs;
-  const change = async (name: string) => {
-    setBusy(true);
-    try { await api.useDatabase(name); onChanged(); setMsg(`Switched to ${name}`); }
-    catch (e) { setMsg(e instanceof Error ? e.message : 'Could not switch database'); }
-    finally { setBusy(false); }
-  };
-  return (
-    <>
-      <Select size="small" value={selected ?? ''} disabled={busy} onOpen={() => void load()}
-        onChange={(e) => void change(e.target.value)} inputProps={{ 'aria-label': 'Active database' }}
-        sx={{ mr: 1.5, minWidth: 190, bgcolor: 'background.paper', color: 'text.primary' }}>
-        {options.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
-      </Select>
-      <Snackbar open={!!msg} autoHideDuration={3500} onClose={() => setMsg('')} message={msg} />
-    </>
-  );
-}
 const NAV = [
   { to: '/', label: 'Dashboard', icon: <DashboardIcon /> },
   { to: '/connections', label: 'Database Connections', icon: <StorageIcon /> },
@@ -71,6 +44,7 @@ const NAV = [
 
 export default function AppLayout() {
   const { status, statuses, refresh } = useConnectionStatus();
+  const location = useLocation();
   const mongo = statuses.find((x) => x.dbType === 'MONGODB' && x.active);
   const liveNames = statuses.map((x) => `${x.connectionName} (${x.dbType === 'MONGODB' ? 'MongoDB' : 'MySQL'} ${x.environment})${x.connected ? '' : ' - lost'}`).join(', ');
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -86,23 +60,30 @@ export default function AppLayout() {
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'common.white' }}>
               <LogoMark size={30} title="" />
-              <Typography variant="h6" component="h1" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>FlowNexus</Typography>
+              <Typography variant="h6" component="h1" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>DB-Utility</Typography>
             </Box>
             <Typography variant="caption" noWrap sx={{ display: { xs: 'none', lg: 'block' }, opacity: 0.7 }}>{TAGLINE}</Typography>
           </Box>
           <ColorModeToggle />
           {status?.connected && (
-            <DatabaseSwitcher profileId={status.profileId} selected={status.databaseName} onChanged={() => void refresh()} />
+            <Box sx={{ display: { xs: 'none', md: 'block' }, mr: 1.5 }}>
+              <DatabaseSelect dbType="MYSQL" profileId={status.profileId} selected={status.databaseName} onChanged={() => void refresh()} onBar />
+            </Box>
           )}
           {status?.connected ? (
-            <Chip color={envColor(status.environment)} label={`${status.environment} · ${status.connectionName}`} sx={{ fontWeight: 600 }} />
+            <Chip color={envColor(status.environment)} label={`${envLabel(status.environment)} · ${status.connectionName}`} sx={{ fontWeight: 600 }} />
           ) : (
             <Chip label={mongo ? 'MySQL: not connected' : 'Not connected'} sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'common.white' }} />
           )}
           {mongo && (
-            <Tooltip title={`Live connections: ${liveNames}`}>
-              <Chip color={mongo.connected ? envColor(mongo.environment) : 'error'} label={`MongoDB · ${mongo.environment} · ${mongo.connectionName}`} sx={{ fontWeight: 600, ml: 1 }} />
-            </Tooltip>
+            <Box sx={{ display: 'flex', alignItems: 'center', ml: 1.5, gap: 1.5 }}>
+              <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                <DatabaseSelect dbType="MONGODB" profileId={mongo.profileId} selected={mongo.databaseName} onChanged={() => void refresh()} onBar />
+              </Box>
+              <Tooltip title={`Live connections: ${liveNames}`}>
+                <Chip color={mongo.connected ? envColor(mongo.environment) : 'error'} label={`MongoDB · ${envLabel(mongo.environment)} · ${mongo.connectionName}`} sx={{ fontWeight: 600 }} />
+              </Tooltip>
+            </Box>
           )}
         </Toolbar>
       </AppBar>
@@ -132,7 +113,7 @@ export default function AppLayout() {
       </Drawer>
       <Box component="main" sx={{ flex: 1, p: 3, minWidth: 0 }}>
         <Toolbar />
-        <Outlet />
+        <Box key={location.pathname} className="page-enter"><Outlet /></Box>
       </Box>
     </Box>
   );

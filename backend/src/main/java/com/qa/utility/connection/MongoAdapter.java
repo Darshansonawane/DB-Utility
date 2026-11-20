@@ -23,7 +23,7 @@ public class MongoAdapter implements DbAdapter {
 
     static MongoClient build(ConnectionProfile p, ConnectionSecrets s) {
         MongoClientSettings.Builder b = MongoClientSettings.builder()
-                .applicationName("FlowNexus")
+                .applicationName("DB-Utility")
                 .applyToClusterSettings(c -> c.serverSelectionTimeout(10, TimeUnit.SECONDS))
                 .applyToSocketSettings(x -> x.connectTimeout(10, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS))
                 .applyToConnectionPoolSettings(x -> x.maxSize(3).minSize(0));
@@ -52,7 +52,7 @@ public class MongoAdapter implements DbAdapter {
     public LiveConnection open(ConnectionProfile profile, ConnectionSecrets secrets) {
         MongoClient client = build(profile, secrets);
         try {
-            client.getDatabase(profile.databaseName()).runCommand(new Document("ping", 1));
+            client.getDatabase("admin").runCommand(new Document("ping", 1));
             return new MongoLive(client, profile);
         } catch (RuntimeException e) {
             client.close();
@@ -64,8 +64,8 @@ public class MongoAdapter implements DbAdapter {
     public Probe probe(ConnectionProfile profile, ConnectionSecrets secrets) {
         long start = System.currentTimeMillis();
         try (MongoClient client = build(profile, secrets)) {
-            client.getDatabase(profile.databaseName()).runCommand(new Document("ping", 1));
-            return new Probe(System.currentTimeMillis() - start, version(client, profile.databaseName()));
+            client.getDatabase("admin").runCommand(new Document("ping", 1));
+            return new Probe(System.currentTimeMillis() - start, version(client, "admin"));
         }
     }
 }

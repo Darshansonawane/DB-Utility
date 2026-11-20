@@ -18,7 +18,7 @@ public class MySqlAdapter implements DbAdapter {
     }
 
     public static String jdbcUrl(ConnectionProfile p) {
-        return "jdbc:mysql://" + p.host() + ":" + p.port() + "/" + p.databaseName()
+        return "jdbc:mysql://" + p.host() + ":" + p.port() + "/" + (p.databaseName() == null ? "" : p.databaseName())
                 + "?connectTimeout=10000&socketTimeout=120000&allowMultiQueries=false&sslMode=PREFERRED&useUnicode=true&characterEncoding=UTF-8";
     }
 
@@ -27,7 +27,9 @@ public class MySqlAdapter implements DbAdapter {
         cfg.setJdbcUrl(jdbcUrl(profile));
         cfg.setUsername(profile.username());
         cfg.setPassword(password);
-        cfg.setCatalog(profile.databaseName()); // lets the pool reset a per-query database switch when a connection is returned
+        if (profile.databaseName() != null && !profile.databaseName().isBlank()) {
+            cfg.setCatalog(profile.databaseName()); // lets the pool reset a per-query database switch when a connection is returned
+        }
         cfg.setMaximumPoolSize(3);
         cfg.setMinimumIdle(0);
         cfg.setConnectionTimeout(10_000);

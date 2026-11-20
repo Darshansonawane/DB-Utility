@@ -64,7 +64,7 @@ class QueryLibraryServiceTest extends AbstractDbTest {
 
     @Test
     void environmentRestrictionIsEnforced() {
-        SavedQuery c = library.create(new SavedQuery(null, "uat-only" + UUID.randomUUID(), "", "Test", "SELECT 1", QueryType.READ, List.of("UAT"), true, List.of()));
+        SavedQuery c = library.create(new SavedQuery(null, "staging-only" + UUID.randomUUID(), "", "Test", "SELECT 1", QueryType.READ, List.of("STAGING"), true, List.of()));
         ApiException e = assertThrows(ApiException.class, () -> library.execute(c.id(), Map.of(), null)); // test connection is QA
         assertTrue(e.getMessage().contains("restricted"));
     }

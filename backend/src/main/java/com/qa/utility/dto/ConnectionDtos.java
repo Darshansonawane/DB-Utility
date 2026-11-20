@@ -42,9 +42,10 @@ public final class ConnectionDtos {
         }
     }
 
-    public record DatabaseList(java.util.List<String> databases, String selected) {
+    /** {@code restricted}: the server would not list databases for this user (names may be incomplete); {@code message} explains. */
+    public record DatabaseList(java.util.List<String> databases, String selected, boolean restricted, String message) {
     }
 
-    public record UseDatabaseRequest(@NotBlank String name) {
+    public record UseDatabaseRequest(@NotBlank String name, String dbType) {
     }
 }

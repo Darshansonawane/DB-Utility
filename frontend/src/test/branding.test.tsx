@@ -20,7 +20,7 @@ describe('branding', () => {
 
   it('Logo components expose accessible names', () => {
     render(<ColorModeProvider><Logo /><LogoMark /></ColorModeProvider>);
-    expect(screen.getAllByRole('img', { name: 'FlowNexus' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole('img', { name: 'DB-Utility' }).length).toBeGreaterThanOrEqual(2);
   });
 
   it('toggle cycles light -> dark -> system and persists', () => {

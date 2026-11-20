@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
-import type { ParamPreview, QueryResult, SavedQuery, WritePreview } from '../types';
+import type { ParamPreview, QueryResult, SavedQuery, StatusView, WritePreview } from '../types';
+import DatabaseSelect from './DatabaseSelect';
 import { initialValues, missingRequired, ms } from '../utils/format';
 import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
@@ -21,6 +22,12 @@ export default function QueryRunner({ query }: { query: SavedQuery }) {
   const varFolders = useFolders('VARIABLE');
   const [resolved, setResolved] = useState<ParamPreview[]>([]);
   const valuesKey = JSON.stringify(values);
+
+  // the active connection of this query's database type, and the databases it can use
+  const engine = query.engine ?? 'MYSQL';
+  const [active, setActive] = useState<StatusView | null | undefined>(undefined);
+  const loadActive = useCallback(() => api.statuses().then((l) => setActive(l.find((s) => s.dbType === engine && s.active && s.connected) ?? null)).catch(() => setActive(null)), [engine]);
+  useEffect(() => { void loadActive(); }, [loadActive]);
 
   // show what each parameter will be bound to (variables filled in, secrets masked) before anything runs
   useEffect(() => {
@@ -59,6 +66,13 @@ export default function QueryRunner({ query }: { query: SavedQuery }) {
     <Stack spacing={2}>
       <Typography variant="body2" color="text.secondary">{query.description}</Typography>
       <Box component="pre" sx={{ m: 0, p: 1.5, bgcolor: (t) => (t.palette.mode === 'dark' ? t.palette.grey[900] : t.palette.grey[100]), borderRadius: 1, fontSize: 12.5, whiteSpace: 'pre-wrap' }}>{query.sql}</Box>
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{engine === 'MONGODB' ? 'MongoDB' : 'MySQL'} database</Typography>
+        {active
+          ? <DatabaseSelect dbType={engine} profileId={active.profileId} selected={query.databaseName ?? active.databaseName} onChanged={() => void loadActive()} />
+          : active === null && <Chip size="small" color="warning" label={`No active ${engine === 'MONGODB' ? 'MongoDB' : 'MySQL'} connection: connect one first`} />}
+        {query.databaseName && <Typography variant="caption" color="text.secondary">This query always runs in <b>{query.databaseName}</b>.</Typography>}
+      </Stack>
       <DynamicForm parameters={query.parameters} values={values} onChange={setValues} disabled={loading} />
       {resolved.some((p) => p.expression.includes('{{') || p.status !== 'OK') && (
         <Box sx={{ border: 1, borderColor: blocked.length ? 'error.main' : 'divider', borderRadius: 1, p: 1.5 }}>

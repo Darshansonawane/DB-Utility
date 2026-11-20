@@ -13,7 +13,7 @@ import FolderPicker from './FolderPicker';
 import { NameDialog } from './FolderTree';
 import { childrenOf, subtreeIds } from './folderUtils';
 
-export const DRAG_TYPE = 'application/x-flownexus-item';
+export const DRAG_TYPE = 'application/x-dbutility-item';
 
 /**
  * File-explorer style folder browser: breadcrumb trail, the subfolders of the current folder as cards, drag an item onto a folder

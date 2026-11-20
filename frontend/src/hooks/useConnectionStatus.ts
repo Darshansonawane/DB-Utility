@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
 import type { StatusView } from '../types';
 
-export const CONNECTIONS_CHANGED = 'flownexus:connections-changed';
+export const CONNECTIONS_CHANGED = 'dbutility:connections-changed';
 
 /** `status` is the active MySQL connection (what queries run on); `statuses` is every live connection of this browser session. */
 export function useConnectionStatus(intervalMs = 20_000) {

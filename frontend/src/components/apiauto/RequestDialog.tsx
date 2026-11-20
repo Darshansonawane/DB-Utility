@@ -41,7 +41,7 @@ export default function RequestDialog({ initial, folders, onClose, onSaved }: { 
           {dirty && <Alert severity="warning" sx={{ py: 0 }}>Unsaved changes: Send tests what you see here, but workflows and the Run button use the saved version. Click Save to keep your edits.</Alert>}
           <Alert severity="info" sx={{ py: 0 }}>
             Use <code>{'{{variable}}'}</code> in the URL, headers and body. Built-ins: <code>{'{{$uuid}} {{$timestamp}} {{$isoDate}} {{$randomInt}}'}</code>.
-            QA/UAT hosts only; <i>Send</i> really calls the API.
+            QA, Staging and Development hosts only; <i>Send</i> really calls the API.
           </Alert>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField size="small" label="Name" required fullWidth value={r.name} onChange={(e) => set({ name: e.target.value })} />

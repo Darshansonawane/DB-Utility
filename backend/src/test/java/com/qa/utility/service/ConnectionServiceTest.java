@@ -44,9 +44,10 @@ class ConnectionServiceTest {
     DbAdapter mongo;
 
     ConnectionService service;
+    ConnectionRegistry registry;
     CryptoService crypto;
     AccessPasswordService access;
-    final AppProperties props = new AppProperties("target/test-data", List.of("QA", "UAT", "DEV"), List.of("prod", "prd", "production", "live"),
+    final AppProperties props = new AppProperties("target/test-data", List.of("QA", "STAGING", "DEV"), List.of("prod", "prd", "production", "live"),
             List.of(), "unit-test-key", 5000, 100, 120, 20, 300, 50);
 
     @BeforeEach
@@ -55,11 +56,17 @@ class ConnectionServiceTest {
         access = new AccessPasswordService();
         when(mysql.type()).thenReturn(DbType.MYSQL);
         when(mongo.type()).thenReturn(DbType.MONGODB);
-        service = new ConnectionService(repo, new ConnectionRegistry(60), new ConnectionPolicy(props), crypto, audit, access, List.of(mysql, mongo));
+        registry = new ConnectionRegistry(60);
+        service = new ConnectionService(repo, registry, new ConnectionPolicy(props), crypto, audit, access, List.of(mysql, mongo));
     }
 
     private ConnectionRequest mysqlReq(String env, String host, String db) {
         return new ConnectionRequest("qa-main", env, "MYSQL", host, 3306, db, "qa_user", "s3cret!", false, null, null, false, "Darshan", "open-sesame", null);
+    }
+
+    private static ConnectionRequest noDb(ConnectionRequest r) {
+        return new ConnectionRequest(r.name(), r.environment(), r.dbType(), r.host(), r.port(), null, r.username(), r.password(), r.useUri(), r.uri(), r.authDatabase(),
+                r.tls(), r.ownerName(), r.accessPassword(), r.newAccessPassword());
     }
 
     private ConnectionRequest mongoReq(String env, String host, String uri, boolean useUri) {
@@ -100,6 +107,25 @@ class ConnectionServiceTest {
         assertThrows(ApiException.class, () -> service.create(mysqlReq("UAT", "db.uat.internal", "bank_production")));
         assertThrows(ApiException.class, () -> service.create(mysqlReq("QA", "host/evil?allowLoadLocalInfile=true", "bank")));
         verify(repo, never()).insert(any());
+    }
+
+    @Test
+    void uatIsStillAcceptedAndStoredAsStaging() {
+        when(repo.insert(any())).thenAnswer(inv -> withId(inv.getArgument(0, ConnectionProfile.class)));
+        assertEquals("STAGING", service.create(mysqlReq("UAT", "db.staging.internal", "bank")).environment());
+        assertEquals("STAGING", service.create(mysqlReq("Staging", "db.staging.internal", "bank")).environment());
+    }
+
+    @Test
+    void theDatabaseNameIsOptionalForBothTypes() {
+        when(repo.insert(any())).thenAnswer(inv -> withId(inv.getArgument(0, ConnectionProfile.class)));
+        service.create(mysqlReq("QA", "db.qa.internal", null));
+        service.create(noDb(mongoReq("QA", "mongo.qa.internal", null, false)));
+        ConnectionRequest uri = new ConnectionRequest("m2", "QA", "MONGODB", null, 0, "", null, null, true, "mongodb://u:p@mongo.qa.internal/", null, false, null, "open-sesame", null);
+        service.create(uri);
+        var captor = ArgumentCaptor.forClass(ConnectionProfile.class);
+        verify(repo, times(3)).insert(captor.capture());
+        assertTrue(captor.getAllValues().stream().allMatch(p -> p.databaseName() == null), "no database stored: it is chosen after connecting");
     }
 
     @Test
@@ -195,7 +221,7 @@ class ConnectionServiceTest {
     @Test
     void mongoHostModeStoresEncryptedPasswordAndTls() {
         when(repo.insert(any())).thenAnswer(inv -> withId(inv.getArgument(0, ConnectionProfile.class)));
-        var view = service.create(mongoReq("UAT", "mongo.uat.internal", null, false));
+        var view = service.create(mongoReq("Staging", "mongo.staging.internal", null, false));
         var captor = ArgumentCaptor.forClass(ConnectionProfile.class);
         verify(repo).insert(captor.capture());
         ConnectionProfile p = captor.getValue();
@@ -228,9 +254,58 @@ class ConnectionServiceTest {
         assertThrows(ApiException.class, () -> service.create(mongoReq("QA", null, "mongodb://u:p@mongo.qa.internal/customers?tlsInsecure=true", true)));
         assertThrows(ApiException.class, () -> service.create(mongoReq("QA", null, "http://not-mongo", true)));
         assertThrows(ApiException.class, () -> service.create(mongoReq("QA", null, "mongodb://u:p@a,b-live.company.com/customers", true)));
-        ConnectionRequest noDb = new ConnectionRequest("m", "QA", "MONGODB", null, 0, null, null, null, true, "mongodb://u:p@mongo.qa.internal/", null, false, null, "open-sesame", null);
-        assertThrows(ApiException.class, () -> service.create(noDb), "database name is needed");
         verify(repo, never()).insert(any());
+    }
+
+    /** A live connection whose server refuses to list databases for the user. */
+    static final class RestrictedLive implements com.qa.utility.connection.LiveConnection {
+        volatile String selected;
+
+        public ConnectionProfile profile() {
+            return new ConnectionProfile(9L, "restricted", "QA", "h", 27017, null, "u", null, DbType.MONGODB, null, null, null, null, false);
+        }
+
+        public DbType type() {
+            return DbType.MONGODB;
+        }
+
+        public Discovery discoverDatabases() {
+            return new Discovery(List.of(), true, "The server did not allow listing databases for this user. Type the database name to use.");
+        }
+
+        public String selectedDatabase() {
+            return selected;
+        }
+
+        public void selectDatabase(String name) {
+            selected = name;
+        }
+
+        public long ping() {
+            return 1;
+        }
+
+        public void close() {
+        }
+    }
+
+    @Test
+    void whenTheServerWillNotListDatabasesTheUserCanTypeOneAndTheServerStillEnforcesAccess() {
+        com.qa.utility.security.SessionContext.set("restricted-test");
+        try {
+            RestrictedLive live = new RestrictedLive();
+            registry.register(live);
+            var list = service.databases(DbType.MONGODB);
+            assertTrue(list.restricted());
+            assertTrue(list.databases().isEmpty());
+            assertNotNull(list.message());
+            assertEquals("typed_db", service.useDatabase("typed_db", DbType.MONGODB).databaseName());
+            assertEquals("typed_db", service.databases(DbType.MONGODB).selected());
+            assertThrows(ApiException.class, () -> service.useDatabase("prod_ledger", DbType.MONGODB), "blocked names are refused even when typed");
+            assertThrows(ApiException.class, () -> service.useDatabase("bad name!", DbType.MONGODB));
+        } finally {
+            com.qa.utility.security.SessionContext.clear();
+        }
     }
 
     @Test

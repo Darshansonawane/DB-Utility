@@ -85,13 +85,15 @@ public class ConnectionController {
         return service.statuses();
     }
 
+    /** Databases the active connection of this type ({@code dbType} MYSQL or MONGODB, default MYSQL) may access. */
     @GetMapping("/databases")
-    public DatabaseList databases() {
-        return service.databases();
+    public DatabaseList databases(@RequestParam(required = false) String dbType) {
+        return service.databases(com.qa.utility.model.DbType.parse(dbType));
     }
 
+    /** Switches the working database of the active connection of this type; no other connection is affected. */
     @PostMapping("/database")
     public StatusView useDatabase(@Valid @RequestBody UseDatabaseRequest r) {
-        return service.useDatabase(r.name());
+        return service.useDatabase(r.name(), com.qa.utility.model.DbType.parse(r.dbType()));
     }
 }

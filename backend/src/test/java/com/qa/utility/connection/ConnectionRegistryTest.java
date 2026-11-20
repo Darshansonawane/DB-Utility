@@ -28,6 +28,17 @@ class ConnectionRegistryTest {
             return p.dbType();
         }
 
+        public Discovery discoverDatabases() {
+            return new Discovery(java.util.List.of(), false, null);
+        }
+
+        public String selectedDatabase() {
+            return null;
+        }
+
+        public void selectDatabase(String name) {
+        }
+
         public long ping() throws Exception {
             if (broken) throw new Exception("boom");
             return 1;

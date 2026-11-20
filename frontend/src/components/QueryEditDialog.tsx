@@ -7,9 +7,10 @@ import ParamDefinitionEditor from './ParamDefinitionEditor';
 import SqlEditorBox from './SqlEditorBox';
 import QueryExtractionEditor from './QueryExtractionEditor';
 import { useFolders } from './folders/FolderTree';
+import { ENV_OPTIONS, canonicalEnv } from '../utils/environments';
 
 const EMPTY: SavedQuery = { name: '', description: '', category: '', sql: '', environments: [], enabled: true, parameters: [] };
-const ENVS = ['QA', 'UAT', 'DEV'];
+const ENVS = ENV_OPTIONS;
 const MONGO_EXAMPLE = `{
   "collection": "customers",
   "operation": "find",
@@ -81,8 +82,8 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
           <Stack direction="row" spacing={2} alignItems="center">
             <Typography variant="body2">Allowed environments (none = all approved):</Typography>
             {ENVS.map((e) => (
-              <FormControlLabel key={e} label={e} control={<Checkbox checked={q.environments.includes(e)}
-                onChange={(ev) => setQ({ ...q, environments: ev.target.checked ? [...q.environments, e] : q.environments.filter((x) => x !== e) })} />} />
+              <FormControlLabel key={e.value} label={e.label} control={<Checkbox checked={q.environments.map(canonicalEnv).includes(e.value)}
+                onChange={(ev) => setQ({ ...q, environments: ev.target.checked ? [...q.environments.map(canonicalEnv), e.value] : q.environments.map(canonicalEnv).filter((x) => x !== e.value) })} />} />
             ))}
             <FormControlLabel label="Enabled" control={<Checkbox checked={q.enabled} onChange={(ev) => setQ({ ...q, enabled: ev.target.checked })} />} />
           </Stack>

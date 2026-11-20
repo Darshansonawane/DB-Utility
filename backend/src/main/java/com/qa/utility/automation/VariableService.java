@@ -31,7 +31,7 @@ public class VariableService {
     private static final Pattern TOKEN = Pattern.compile("\\{\\{\\s*([A-Za-z_$][A-Za-z0-9_.$-]{0,99})(?:\\(([^)]*)\\))?\\s*}}");
     private static final Pattern NAME = Pattern.compile("^[A-Za-z_][A-Za-z0-9_.-]{0,99}$");
     private static final Set<String> SCOPES = Set.of("GLOBAL", "FOLDER", "ENVIRONMENT");
-    private static final Set<String> ENVIRONMENTS = Set.of("QA", "UAT");
+    private static final Set<String> ENVIRONMENTS = Set.of("QA", "STAGING", "DEV");
     private static final SecureRandom RND = new SecureRandom();
     public static final String MASK = "••••••••";
     static final String ENV_SETTING = "automation.activeEnvironment";
@@ -72,9 +72,9 @@ public class VariableService {
         String scope = b.scope() == null || b.scope().isBlank() ? "GLOBAL" : b.scope().toUpperCase();
         if (!SCOPES.contains(scope)) throw ApiException.badRequest("Scope must be one of " + SCOPES);
         long folder = folders.requireFolder("VARIABLE", b.folderId());
-        String env = b.environment() == null ? "" : b.environment().toUpperCase();
+        String env = b.environment() == null ? "" : com.qa.utility.model.Environments.canonical(b.environment());
         if (scope.equals("FOLDER") && folder == 0) throw ApiException.badRequest("A folder-scoped variable must be saved inside a folder");
-        if (scope.equals("ENVIRONMENT") && !ENVIRONMENTS.contains(env)) throw ApiException.badRequest("Choose the environment (QA or UAT) for an environment variable");
+        if (scope.equals("ENVIRONMENT") && !ENVIRONMENTS.contains(env)) throw ApiException.badRequest("Choose the environment (QA, Staging or Development) for an environment variable");
         if (!scope.equals("ENVIRONMENT")) env = "";
         VarRow existing = id == null ? null : repo.variableById(id).orElseThrow(() -> ApiException.notFound("Variable not found"));
         String name = b.name() == null || b.name().isBlank() ? (existing == null ? null : existing.name()) : b.name().trim();
@@ -126,8 +126,8 @@ public class VariableService {
     }
 
     public void setActiveEnvironment(String env) {
-        String e = env == null ? "" : env.trim().toUpperCase();
-        if (!e.isEmpty() && !ENVIRONMENTS.contains(e)) throw ApiException.badRequest("Environment must be QA, UAT or empty");
+        String e = com.qa.utility.model.Environments.canonical(env);
+        if (!e.isEmpty() && !ENVIRONMENTS.contains(e)) throw ApiException.badRequest("Environment must be QA, Staging, Development or empty");
         repo.putSetting(ENV_SETTING, e);
     }
 
