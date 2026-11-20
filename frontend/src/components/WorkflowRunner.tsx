@@ -14,6 +14,7 @@ import { ms } from '../utils/format';
 import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
 import StatusChip from './StatusChip';
+import PipelineBar from './motion/PipelineBar';
 import FlowConnector, { flowStateOf } from './motion/FlowConnector';
 
 type Overrides = Record<number, Record<string, string>>;
@@ -147,6 +148,8 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
           <Typography variant="caption" color="text.secondary">Values and rows are kept in memory for this session only; history stores masked identifiers.</Typography>
         </Stack>
       )}
+
+      {run && <PipelineBar steps={workflow.steps.map((s) => ({ order: s.order, name: s.name, status: run.steps.find((x) => x.order === s.order)?.status ?? 'PENDING' }))} />}
 
       {workflow.steps.map((s, idx) => {
         const sv: StepRunView = run?.steps.find((x) => x.order === s.order) ?? {
