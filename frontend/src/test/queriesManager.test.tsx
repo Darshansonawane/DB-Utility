@@ -95,3 +95,26 @@ describe('step test values from an earlier step result', () => {
     expect(knownValues(byColumn, [], {}, steps)).toEqual({});
   });
 });
+
+import { reorderSteps } from '../components/workflow/reorder';
+describe('reordering workflow steps', () => {
+  const st = (order: number, name: string, extra: object = {}) => ({ order, name, dependsOn: [], mappings: [], outputFields: [], ...extra }) as never;
+  it('renumbers 1..n and keeps references pointing at the same steps', () => {
+    const steps = [
+      st(1, 'A'),
+      st(2, 'B', { dependsOn: [1], mappings: [{ paramName: 'p', sourceType: 'STEP_OUTPUT', sourceRef: '1', sourceField: 'id' }] }),
+      st(3, 'C', { dependsOn: [2], mappings: [{ paramName: 'p', sourceType: 'STEP_OUTPUT', sourceRef: '2', sourceField: 'id' }, { paramName: 'q', sourceType: 'CONSTANT', constantValue: 'x' }] }),
+    ];
+    const { steps: out } = reorderSteps(steps, 2, 0); // C moves to the top
+    expect(out.map((s) => `${s.order}:${s.name}`)).toEqual(['1:C', '2:A', '3:B']);
+    expect(out[0].dependsOn).toEqual([3]);          // C still depends on B, now step 3
+    expect(out[0].mappings[0].sourceRef).toBe('3');
+    expect(out[0].mappings[1].constantValue).toBe('x');
+    expect(out[2].dependsOn).toEqual([2]);          // B still depends on A, now step 2
+    expect(out[2].mappings[0].sourceRef).toBe('2');
+  });
+  it('ignores moves outside the list', () => {
+    const steps = [st(1, 'A'), st(2, 'B')];
+    expect(reorderSteps(steps, 0, 5).steps).toBe(steps);
+  });
+});

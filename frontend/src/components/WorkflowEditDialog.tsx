@@ -4,6 +4,9 @@ import {
   Box, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ApiStepOptionsEditor, { DEFAULT_OPTIONS } from './ApiStepOptionsEditor';
@@ -12,6 +15,7 @@ import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import StepTestRun from './workflow/StepTestRun';
+import { reorderSteps } from './workflow/reorder';
 import { folderPaths } from './folders/folderUtils';
 import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, QueryResult, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
@@ -51,6 +55,15 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
     void run(async () => { setQueries(await api.queries()); setApiRequests(await api.apiRequests()); });
   }, [open, initial, run, setError]);
 
+  // reordering: drag a step by its handle (or use the arrows); steps are renumbered 1..n and every reference to a step number follows
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const moveStep = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= w.steps.length) return;
+    const { steps, renumber } = reorderSteps(w.steps, from, to);
+    setW((cur) => ({ ...cur, steps }));
+    setStepResults((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [renumber.get(Number(k)) ?? Number(k), v])));
+  };
   const updStep = (i: number, patch: Partial<WorkflowStep>) => setW((cur) => ({ ...cur, steps: cur.steps.map((s, k) => (k === i ? { ...s, ...patch } : s)) }));
   const queryOf = (id: number) => queries.find((q) => q.id === id);
   const paths = useMemo(() => folderPaths(folders), [folders]);
@@ -172,9 +185,19 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
 
           <Typography variant="subtitle1" fontWeight={700}>Steps</Typography>
           {w.steps.map((s, i) => (
-            <Paper key={i} variant="outlined" sx={{ p: 2 }}>
+            <Paper key={i} variant="outlined" data-testid={`step-${i}`}
+              onDragOver={(e) => { if (dragFrom !== null) { e.preventDefault(); setDragOver(i); } }}
+              onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) moveStep(dragFrom, i); setDragFrom(null); setDragOver(null); }}
+              sx={{ p: 2, opacity: dragFrom === i ? 0.5 : 1, borderColor: dragOver === i && dragFrom !== null && dragFrom !== i ? 'primary.main' : undefined, borderWidth: dragOver === i && dragFrom !== null && dragFrom !== i ? 2 : 1 }}>
               <Stack spacing={1.5}>
                 <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack alignItems="center" sx={{ mx: -0.5 }}>
+                    <IconButton size="small" aria-label={`move step ${s.order} up`} disabled={i === 0} onClick={() => moveStep(i, i - 1)} sx={{ p: 0.25 }}><ArrowUpwardIcon sx={{ fontSize: 16 }} /></IconButton>
+                    <Box draggable aria-label={`drag step ${s.order}`} title="Drag to reorder" sx={{ cursor: 'grab', display: 'flex', color: 'text.secondary' }}
+                      onDragStart={(e) => { setDragFrom(i); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); const card = (e.currentTarget as HTMLElement).closest('[data-testid^="step-"]'); if (card) e.dataTransfer.setDragImage(card as HTMLElement, 20, 20); }}
+                      onDragEnd={() => { setDragFrom(null); setDragOver(null); }}><DragIndicatorIcon fontSize="small" /></Box>
+                    <IconButton size="small" aria-label={`move step ${s.order} down`} disabled={i === w.steps.length - 1} onClick={() => moveStep(i, i + 1)} sx={{ p: 0.25 }}><ArrowDownwardIcon sx={{ fontSize: 16 }} /></IconButton>
+                  </Stack>
                   <TextField size="small" type="number" label="Order" value={s.order} sx={{ width: 90 }} onChange={(e) => updStep(i, { order: Number(e.target.value) })} />
                   <TextField size="small" label="Step name" fullWidth value={s.name} onChange={(e) => updStep(i, { name: e.target.value })} />
                   <ToggleButtonGroup size="small" exclusive value={s.stepType ?? 'QUERY'} onChange={(_, v) => v && switchType(i, v)} aria-label="step type">
@@ -225,7 +248,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                       )}
                       {m?.sourceType === 'STEP_OUTPUT' && (
                         <>
-                          <TextField size="small" select label="From step" sx={{ minWidth: 240 }} value={m.sourceRef ?? ''} onChange={(e) => patchMap(i, p.name, { sourceRef: e.target.value })}>
+                          <TextField size="small" select label="From step" sx={{ minWidth: 240 }} value={m.sourceRef ?? ''} error={(parseInt(m.sourceRef ?? '', 10) || 0) >= s.order && (m.sourceRef ?? '') !== ''} helperText={(parseInt(m.sourceRef ?? '', 10) || 0) >= s.order && (m.sourceRef ?? '') !== '' ? 'Runs later than this step' : undefined} onChange={(e) => patchMap(i, p.name, { sourceRef: e.target.value })}>
                             {w.steps.filter((x) => x.order < s.order || String(x.order) === m.sourceRef).map((x) => <MenuItem key={x.order} value={String(x.order)}>{`${x.order}. ${x.name || 'Untitled step'}`}</MenuItem>)}
                           </TextField>
                           <TextField size="small" label="Output field" sx={{ minWidth: 220 }} placeholder="id  /  data.items.0.id" value={m.sourceField ?? ''} onChange={(e) => patchMap(i, p.name, { sourceField: e.target.value })} />
