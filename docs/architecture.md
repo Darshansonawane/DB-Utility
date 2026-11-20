@@ -22,6 +22,15 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 - Environments are QA, STAGING (formerly UAT, migrated at startup) and DEV (shown as Development).
 - Saved queries have an `engine`. `MYSQL`: SQL as before. `MONGODB`: `sql` holds a JSON spec run by `MongoExecutionService` (read-only; "?" strings are typed parameters). Both return the same `QueryResult`, so forms, workflows, outputs and variable extraction are unchanged.
 
+## Workflow Manager hierarchy: Projects → Folders → Workflows
+
+- A **project** (`project` table) is an application, product or business domain. Every workflow has a `project_id`; every workflow folder has a `project_id`; a workflow may sit in a folder (`folder_id`, 0 = directly in the project). Folders nest (up to 8 levels) and always belong to their parent's project.
+- Names are unique **per project** (folders per parent, workflows per project), so two projects can both have an "E2E Automation" folder.
+- Moves: a workflow moves between folders of its project, or to another project (name clash refused); a folder moves only within its project. Deleting a folder never deletes workflows: they move to the top level of the project. A non-empty project is deleted only by moving its folders and workflows to another project (a clashing name arriving there is renamed, never overwritten).
+- `Workflow` carries read-only `updatedAt`, `lastStatus` and `lastRunAt` (from `workflow_run`) so the UI can show the last execution without extra calls.
+- **Migration** (`ProjectMigration`, runs on every start, idempotent): replaces the old unique constraints with per-project ones, creates "Default Project" if needed and moves every workflow and workflow folder that has no project into it. Ids, steps, mappings and run history are not touched.
+- There are no user accounts, so projects share the model workflows already had (shared, not per-user). Connections remain per browser session and protected by their access password.
+
 ## Why there are no per-query endpoints or components
 
 | Concern | Generic mechanism |
@@ -42,6 +51,8 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 | SQL | `POST /api/sql/analyze`, `/execute`, `/preview` |
 | Query library | `GET/POST /api/queries`, `GET/PUT/DELETE /{id}`, `/{id}/duplicate`, `/{id}/enabled`, `/{id}/preview`, `/{id}/execute`, `/categories` |
 | Metadata | `GET /api/metadata/schemas`, `/schemas/{s}/tables`, `/tables/{t}`, `/columns/{c}/values`, `/sample` |
+| Projects | `GET/POST /api/projects`, `GET/PUT /api/projects/{id}`, `DELETE /api/projects/{id}?moveTo=<projectId>` (needed when the project is not empty) |
+| Workflow folders | `GET /api/folders?kind=WORKFLOW[&projectId=]`, `POST /api/folders` (`projectId` for a top-level folder), `PUT/DELETE /api/folders/{id}` |
 | Workflows | `GET/POST /api/workflows`, `PUT/DELETE /{id}`, `POST /{id}/runs`, `GET /api/workflow-runs/{runId}`, `POST /{runId}/execute`, `/{runId}/stop` |
 | History | `GET /api/history/executions`, `/workflow-runs`, `/workflow-runs/{id}`, `/audit` |
 | Other | `GET /api/dashboard`, `GET/PUT /api/settings` |
@@ -62,9 +73,9 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 - A step with a missing required value, or whose declared dependency did not complete, is `BLOCKED` and not executed. A query that returns zero rows is `NO_DATA` (shown as a missing record), and dependents needing its values are blocked.
 - Re-running a step puts everything downstream of it back to `PENDING` (its outputs may have changed).
 - Retries apply to SQL execution failures only. `stopOnFailure` skips the remaining selected steps. Stop takes effect after the current step.
-- Workflows execute **read** queries only. Write queries are refused by the engine until preview/confirmation is integrated per step.
+- Workflow steps run **SELECT, INSERT, UPDATE and DELETE** directly (MySQL). There is no workflow-level write permission, preview or confirmation: the configured database user's privileges are the only authority, and the database's own error (for example `UPDATE command denied`) is reported on the step. The statement checks (single statement, `WHERE` required for UPDATE/DELETE), the transaction, the affected-row limit and the audit record still apply. A write that affects 0 rows is shown as `NO_DATA`; rows changed are recorded in the run history. MongoDB queries stay read-only.
 - Live results (values and rows) are held in memory for the last 50 runs. Persisted history keeps masked identifiers, statuses, timings and counts, never row data.
 
 ## Metadata tables
 
-`connection_profile` (now with `db_type`, `owner_name`, `access_password_hash`, `uri_encrypted`, `auth_database`, `tls`), `saved_query` (now with `engine`), `query_parameter`, `workflow`, `workflow_input`, `workflow_step`, `workflow_param_mapping`, `execution_history`, `workflow_run`, `workflow_step_run`, `audit_log`, `app_setting`. See [`database/metadata-schema.sql`](../database/metadata-schema.sql). The same script works on MySQL 8 if you prefer a dedicated metadata schema.
+`project`, `connection_profile` (now with `db_type`, `owner_name`, `access_password_hash`, `uri_encrypted`, `auth_database`, `tls`), `saved_query` (now with `engine`), `query_parameter`, `workflow`, `workflow_input`, `workflow_step`, `workflow_param_mapping`, `execution_history`, `workflow_run`, `workflow_step_run`, `audit_log`, `app_setting`. See [`database/metadata-schema.sql`](../database/metadata-schema.sql). The same script works on MySQL 8 if you prefer a dedicated metadata schema.

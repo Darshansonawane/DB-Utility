@@ -10,6 +10,10 @@ public final class WorkflowDtos {
     private WorkflowDtos() {
     }
 
+    /** Move a workflow: {@code folderId} 0 = directly in the project; {@code projectId} (optional) moves it to another project. */
+    public record MoveWorkflow(Long folderId, Long projectId) {
+    }
+
     public record StartRunRequest(Map<String, String> inputs, Map<Integer, Map<String, String>> overrides, List<Integer> steps) {
     }
 

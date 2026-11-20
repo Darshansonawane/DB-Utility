@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type {
-  AppSettings, DbType, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
+  AppSettings, DbType, Project, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
   SqlAnalysis, StatusView, ApiRequestDef, ApiRunResult, ApiWorkflowDef, ApiRunView, Folder, FolderKind, VariableBody, PreviewResult, ParamPreview, InfoItem, InfoSummary, RunSummary, WorkflowReport, OverviewRow, VariableView, DatabaseList, TestResult, Workflow, WritePreview,
 } from '../types';
 
@@ -67,10 +67,14 @@ export const api = {
   activeEnvironment: () => d<{ environment: string }>(http.get('/automation/environment')),
   setActiveEnvironment: (environment: string) => d<{ environment: string }>(http.put('/automation/environment', { environment })),
   folders: (kind: FolderKind) => d<Folder[]>(http.get('/folders', { params: { kind } })),
-  createFolder: (kind: FolderKind, parentId: number, name: string) => d<Folder>(http.post('/folders', { kind, parentId, name })),
+  createFolder: (kind: FolderKind, parentId: number, name: string, projectId?: number) => d<Folder>(http.post('/folders', { kind, parentId, name, projectId })),
+  projects: () => d<Project[]>(http.get('/projects')),
+  createProject: (name: string, description?: string) => d<Project>(http.post('/projects', { name, description })),
+  updateProject: (id: number, name: string, description?: string) => d<Project>(http.put(`/projects/${id}`, { name, description })),
+  deleteProject: (id: number, moveTo?: number) => d<void>(http.delete(`/projects/${id}`, { params: { moveTo } })),
   updateFolder: (id: number, patch: { name?: string; parentId?: number }) => d<Folder>(http.put(`/folders/${id}`, patch)),
   deleteFolder: (id: number) => d<void>(http.delete(`/folders/${id}`)),
-  moveWorkflow: (id: number, folderId: number) => d<void>(http.put(`/workflows/${id}/folder`, { folderId })),
+  moveWorkflow: (id: number, folderId: number, projectId?: number) => d<void>(http.put(`/workflows/${id}/folder`, { folderId, projectId })),
   moveApiRequest: (id: number, folderId: number) => d<void>(http.put(`/automation/requests/${id}/folder`, { folderId })),
   moveApiWorkflow: (id: number, folderId: number) => d<void>(http.put(`/automation/workflows/${id}/folder`, { folderId })),
   previewApiRequest: (r: ApiRequestDef) => d<PreviewResult>(http.post('/automation/preview', r)),

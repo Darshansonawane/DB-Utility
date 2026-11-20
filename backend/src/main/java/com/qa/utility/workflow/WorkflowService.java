@@ -20,9 +20,12 @@ public class WorkflowService {
     private final AuditService audit;
     private final com.qa.utility.automation.ApiAutomationRepository apiRequests;
     private final com.qa.utility.folder.FolderService folders;
+    private final com.qa.utility.project.ProjectService projects;
 
     public WorkflowService(WorkflowRepository repo, SavedQueryRepository queries, AuditService audit,
-                           com.qa.utility.automation.ApiAutomationRepository apiRequests, com.qa.utility.folder.FolderService folders) {
+                           com.qa.utility.automation.ApiAutomationRepository apiRequests, com.qa.utility.folder.FolderService folders,
+                           com.qa.utility.project.ProjectService projects) {
+        this.projects = projects;
         this.apiRequests = apiRequests;
         this.folders = folders;
         this.repo = repo;
@@ -39,7 +42,7 @@ public class WorkflowService {
     }
 
     public Workflow create(Workflow w) {
-        w = normalised(w);
+        w = normalised(w, null);
         validate(w, null);
         try {
             long id = repo.insert(w);
@@ -51,8 +54,8 @@ public class WorkflowService {
     }
 
     public Workflow update(long id, Workflow w) {
-        get(id);
-        w = normalised(w);
+        Workflow existing = get(id);
+        w = normalised(w, existing);
         validate(w, id);
         try {
             repo.update(id, w);
@@ -63,9 +66,23 @@ public class WorkflowService {
         return get(id);
     }
 
+    /** Moves within the workflow's project (folderId 0 = directly in the project), or to another project when {@code projectId} is given. */
+    public void move(long id, Long folderId, Long projectId) {
+        Workflow w = get(id);
+        long project = projectId == null || projectId == 0 ? w.projectId() : projects.requireProject(projectId);
+        long folder = folders.requireWorkflowFolder(folderId, project);
+        if (project != w.projectId()) {
+            if (repo.nameTaken(project, w.name(), id)) throw ApiException.conflict("The target project already has a workflow named '" + w.name() + "'");
+            repo.move(id, project, folder);
+        } else {
+            repo.move(id, folder);
+        }
+        projects.touch(project);
+        audit.record("WORKFLOW_MOVED", null, null, null, null, "SUCCESS", w.name());
+    }
+
     public void move(long id, Long folderId) {
-        get(id);
-        repo.move(id, folders.requireFolder("WORKFLOW", folderId));
+        move(id, folderId, null);
     }
 
     public void delete(long id) {
@@ -75,11 +92,20 @@ public class WorkflowService {
             throw ApiException.conflict("'" + w.name() + "' is used as a step in: " + String.join(", ", parents) + ". Remove it from those workflows first.");
         }
         repo.delete(id);
+        projects.touch(w.projectId());
         audit.record("WORKFLOW_DELETED", null, null, null, null, "SUCCESS", w.name());
     }
 
-    private Workflow normalised(Workflow w) {
-        return new Workflow(w.id(), w.name(), w.description(), w.inputs(), w.steps(), folders.requireFolder("WORKFLOW", w.folderId()));
+    /** Every workflow belongs to a project: the one given, else its folder's project, else (on update) the current one, else the default project. */
+    private Workflow normalised(Workflow w, Workflow existing) {
+        Long requested = w.projectId() == null || w.projectId() == 0 ? null : w.projectId();
+        long project;
+        if (requested != null) project = projects.requireProject(requested);
+        else if (w.folderId() != null && w.folderId() != 0) project = folders.get(w.folderId()).projectId();
+        else if (existing != null) project = existing.projectId();
+        else project = projects.requireProject(null);
+        long folder = folders.requireWorkflowFolder(w.folderId(), project);
+        return new Workflow(w.id(), w.name(), w.description(), w.inputs(), w.steps(), folder, project);
     }
 
     private static final int MAX_NESTING = 5;

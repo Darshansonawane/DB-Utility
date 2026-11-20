@@ -51,6 +51,8 @@ On first start the backend creates `~/.qa-database-utility/` (metadata DB and en
 
 Existing connections from an earlier version keep working after the upgrade, but the first time you connect to one you are asked to choose its access password.
 
+Workflow Manager: create a **project** (for example Savings Wallet), then folders and workflows inside it. Existing workflows and folders from an earlier version are moved into a "Default Project" automatically (nothing is lost); rename it or move workflows to your own projects. Workflow steps may run INSERT / UPDATE / DELETE: they execute automatically with the database user's own privileges, so use a connection whose account has only the grants your flows need.
+
 MongoDB queries: Saved Queries -> New query -> Database type **MongoDB**, for example `{"collection":"customers","filter":{"customerId":"?"},"limit":50}`. Operations: find, count, aggregate, distinct (read-only).
 
 For a shared server set `qa-utility.cookie-secure=true` (HTTPS only), a strong `QA_UTILITY_MASTER_KEY`, and put the app behind your company TLS terminator. `qa-utility.session-idle-minutes` (default 480) closes the live connections of an idle browser session.

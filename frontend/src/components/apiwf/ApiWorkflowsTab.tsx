@@ -175,9 +175,9 @@ export default function ApiWorkflowsTab({ requests, workflows: list, folders, re
                         </ToggleButtonGroup>
                         <TextField size="small" label="Step name" value={s.name} sx={{ minWidth: 220 }} onChange={(e) => updStep(i, { name: e.target.value })} />
                         {sql ? (
-                          <Autocomplete size="small" fullWidth options={queries.filter((x) => x.queryType !== 'WRITE')} getOptionLabel={(o) => o.name} value={q ?? null}
+                          <Autocomplete size="small" fullWidth options={queries} getOptionLabel={(o) => o.name} value={q ?? null}
                             onChange={(_, v) => updStep(i, { queryId: v?.id ?? null, queryName: v?.name, paramValues: {}, name: s.name || (v?.name ?? '') })}
-                            renderInput={(p) => <TextField {...p} label="Saved SQL query (read-only)" />} />
+                            renderInput={(p) => <TextField {...p} label="Saved SQL query (SELECT, INSERT, UPDATE or DELETE)" />} />
                         ) : (
                           <Autocomplete size="small" fullWidth options={requests} getOptionLabel={(o) => `${o.method} ${o.name}`} value={reqOf(s.requestId) ?? null}
                             onChange={(_, v) => updStep(i, { requestId: v?.id ?? 0, requestName: v?.name, requestMethod: v?.method, name: s.name || (v?.name ?? '') })}

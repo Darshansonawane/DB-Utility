@@ -322,3 +322,17 @@ UPDATE app_setting SET setting_value = 'STAGING' WHERE setting_key = 'automation
 UPDATE execution_history SET environment = 'STAGING' WHERE environment = 'UAT';
 UPDATE workflow_run SET environment = 'STAGING' WHERE environment = 'UAT';
 UPDATE audit_log SET environment = 'STAGING' WHERE environment = 'UAT';
+
+-- ---------------------------------------------------------------- Projects -> Folders -> Workflows
+-- Workflow Manager hierarchy. Every workflow belongs to a project; workflow folders belong to a project; a workflow may sit in a folder
+-- (folder_id 0 = directly in the project). Existing workflows and folders are moved into a "Default Project" at startup
+-- (see ProjectMigration), keeping every id, configuration and run history.
+CREATE TABLE IF NOT EXISTS project (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  description VARCHAR(1000),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+ALTER TABLE folder ADD COLUMN IF NOT EXISTS project_id BIGINT DEFAULT 0 NOT NULL;
+ALTER TABLE workflow ADD COLUMN IF NOT EXISTS project_id BIGINT DEFAULT 0 NOT NULL;

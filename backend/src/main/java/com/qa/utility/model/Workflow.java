@@ -14,11 +14,25 @@ public record Workflow(
         @Size(max = 1000) String description,
         @Valid List<WorkflowInput> inputs,
         @Valid List<WorkflowStep> steps,
-        Long folderId) {
+        Long folderId,
+        /** Owning project. Optional when saving (a folder's project, else the default project); always set when read. */
+        Long projectId,
+        /** Read-only extras for the Workflow Manager: last change, and the most recent run's status and start time (null = never run). */
+        java.time.Instant updatedAt,
+        String lastStatus,
+        java.time.Instant lastRunAt) {
 
-    /** Backward-compatible constructor: top level (no folder). */
+    /** Backward-compatible constructor: no folder, default project. */
     public Workflow(Long id, String name, String description, List<WorkflowInput> inputs, List<WorkflowStep> steps) {
-        this(id, name, description, inputs, steps, null);
+        this(id, name, description, inputs, steps, null, null, null, null, null);
+    }
+
+    public Workflow(Long id, String name, String description, List<WorkflowInput> inputs, List<WorkflowStep> steps, Long folderId) {
+        this(id, name, description, inputs, steps, folderId, null, null, null, null);
+    }
+
+    public Workflow(Long id, String name, String description, List<WorkflowInput> inputs, List<WorkflowStep> steps, Long folderId, Long projectId) {
+        this(id, name, description, inputs, steps, folderId, projectId, null, null, null);
     }
 
     public Workflow {

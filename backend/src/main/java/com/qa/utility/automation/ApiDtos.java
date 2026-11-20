@@ -114,7 +114,7 @@ public final class ApiDtos {
 
     // ------------------------------------------------------------------ API workflows
 
-    /** stepType API_REQUEST (requestId) or SQL_QUERY (queryId + paramValues, read-only saved query). */
+    /** stepType API_REQUEST (requestId) or SQL_QUERY (queryId + paramValues, saved query: SELECT, or INSERT / UPDATE / DELETE run directly). */
     public record ApiWfStep(Long id, int order, @NotBlank String name, long requestId, String requestName, String requestMethod,
                             String onFailure, boolean enabled, @Valid ApiStepOptions options, String stepType, Long queryId,
                             String queryName, Map<String, String> paramValues) {

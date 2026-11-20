@@ -21,6 +21,13 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import com.qa.utility.automation.ApiDtos.*;
+import com.qa.utility.automation.ApiWorkflowRunner;
+import com.qa.utility.automation.ApiWorkflowService;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +55,8 @@ class MultiDatabaseIntegrationTest {
     @Autowired WorkflowService workflows;
     @Autowired WorkflowExecutor executor;
     @Autowired SettingsService settings;
+    @Autowired ApiWorkflowService apiWorkflows;
+    @Autowired ApiWorkflowRunner apiRunner;
 
     final String u = UUID.randomUUID().toString().substring(0, 8);
 
@@ -413,5 +422,163 @@ class MultiDatabaseIntegrationTest {
         connections.activate(norole.id());
         assertTrue(connections.databases(DbType.MONGODB).databases().isEmpty());
         assertEquals(4, connections.statuses().size());
+    }
+
+    // ------------------------------------------------------------------ workflow writes against the real MySQL
+
+    /** Direct, independent JDBC connection as the full-privilege test user: used to create fixtures and to check what really changed. */
+    Connection direct() throws Exception {
+        return DriverManager.getConnection("jdbc:mysql://127.0.0.1:" + MYSQL_PORT + "/bank_wallet", MYSQL_USER, MYSQL_PW);
+    }
+
+    String table;
+
+    void fixture() throws Exception {
+        table = "wf_schedule_" + u;
+        try (Connection c = direct(); Statement st = c.createStatement()) {
+            st.execute("CREATE TABLE bank_wallet." + table + " (id INT PRIMARY KEY, customer_id VARCHAR(20), scheduled_date DATE, status VARCHAR(20))");
+            st.execute("INSERT INTO bank_wallet." + table + " VALUES (1,'C100','2027-02-01','OPEN'),(2,'C100','2027-01-01','OPEN'),(3,'C100','2026-12-01','OPEN'),(4,'C999','2027-02-01','OPEN')");
+        }
+    }
+
+    void dropFixture() throws Exception {
+        try (Connection c = direct(); Statement st = c.createStatement()) {
+            st.execute("DROP TABLE IF EXISTS bank_wallet." + table);
+        }
+    }
+
+    String scalar(String sql) throws Exception {
+        try (Connection c = direct(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            return rs.next() ? rs.getString(1) : null;
+        }
+    }
+
+    SavedQuery sqlQuery(String name, QueryType type, String sql, QueryParameter... params) {
+        return library.create(new SavedQuery(null, name + u, null, "it", sql, type, List.of(), true, List.of(params)));
+    }
+
+    WorkflowStep step(int order, String name, SavedQuery q, List<Integer> deps, List<OutputField> outs, ParamMapping... maps) {
+        return new WorkflowStep(null, order, name, null, q.id(), null, deps, 0, 0, false, outs, List.of(maps));
+    }
+
+    @Test
+    void workflowUpdateInsertAndDeleteReallyChangeTheMySqlDatabase() throws Exception {
+        fixture();
+        try {
+            SessionContext.set("s-" + u);
+            ConnectionView c = mysqlAs("wf-write-", MYSQL_USER, MYSQL_PW);
+            connections.connect(c.id(), ACCESS);
+            connections.useDatabase("bank_wallet", DbType.MYSQL);
+            assertTrue(settings.get().readOnlyMode(), "the global read-only switch is ON and must not matter to workflows");
+
+            SavedQuery fetch = sqlQuery("fetch-", QueryType.READ, "SELECT id FROM " + table + " WHERE customer_id = ? ORDER BY id DESC", p("customer_id", ParamType.STRING));
+            SavedQuery update = sqlQuery("upd-", QueryType.WRITE, "UPDATE " + table + " SET scheduled_date = ?, status = ? WHERE id = ?",
+                    p("d", ParamType.DATE), p("status", ParamType.STRING), p("id", ParamType.INTEGER));
+            SavedQuery insert = sqlQuery("ins-", QueryType.WRITE, "INSERT INTO " + table + " (id, customer_id, scheduled_date, status) VALUES (?, ?, ?, ?)",
+                    p("id", ParamType.INTEGER), p("customer", ParamType.STRING), p("d", ParamType.DATE), p("status", ParamType.STRING));
+            SavedQuery delete = sqlQuery("del-", QueryType.WRITE, "DELETE FROM " + table + " WHERE customer_id = ? AND status = ?", p("customer", ParamType.STRING), p("status", ParamType.STRING));
+            SavedQuery verify = sqlQuery("verify-", QueryType.READ, "SELECT status FROM " + table + " WHERE id = ?", p("id", ParamType.INTEGER));
+
+            Workflow w = workflows.create(new Workflow(null, "real-writes-" + u, null, List.of(new WorkflowInput("customerId", "Customer", ParamType.STRING, true)), List.of(
+                    step(1, "fetch schedule", fetch, List.of(), List.of(new OutputField("latestId", "id")), new ParamMapping("customer_id", SourceType.INPUT, "customerId", null, null)),
+                    step(2, "update the schedule date", update, List.of(1), List.of(), new ParamMapping("d", SourceType.CONSTANT, null, null, "2026-11-01"),
+                            new ParamMapping("status", SourceType.CONSTANT, null, null, "RESTORED"), new ParamMapping("id", SourceType.STEP_OUTPUT, "1", "latestId", null)),
+                    step(3, "insert a temporary row", insert, List.of(2), List.of(), new ParamMapping("id", SourceType.CONSTANT, null, null, "50"),
+                            new ParamMapping("customer", SourceType.INPUT, "customerId", null, null), new ParamMapping("d", SourceType.CONSTANT, null, null, "2030-01-01"),
+                            new ParamMapping("status", SourceType.CONSTANT, null, null, "TEMP")),
+                    step(4, "read back what step 2 wrote", verify, List.of(2), List.of(new OutputField("status", "status")), new ParamMapping("id", SourceType.STEP_OUTPUT, "1", "latestId", null)),
+                    step(5, "delete the temporary row", delete, List.of(3), List.of(), new ParamMapping("customer", SourceType.INPUT, "customerId", null, null),
+                            new ParamMapping("status", SourceType.CONSTANT, null, null, "TEMP")))));
+
+            RunView run = executor.runNow(w.id(), Map.of("customerId", "C100"), Map.of(), List.of());
+
+            assertEquals("SUCCESS", run.status(), run.steps().toString());
+            assertEquals("3", run.steps().get(1).params().get("id"), "step 2 received the id captured by step 1 (newest row)");
+            assertEquals(1, run.steps().get(1).rowsAffected());
+            assertEquals(1, run.steps().get(2).rowsAffected());
+            assertEquals("RESTORED", run.steps().get(3).outputs().get("status"), "step 4 read the value step 2 wrote, in the same run");
+            assertEquals(1, run.steps().get(4).rowsAffected());
+            // what really happened in MySQL, seen through a separate connection (so it is committed, not pending)
+            assertEquals("2026-11-01", scalar("SELECT scheduled_date FROM " + table + " WHERE id = 3"));
+            assertEquals("RESTORED", scalar("SELECT status FROM " + table + " WHERE id = 3"));
+            assertNull(scalar("SELECT id FROM " + table + " WHERE id = 50"), "inserted by step 3, deleted by step 5");
+            assertEquals("3", scalar("SELECT COUNT(*) FROM " + table + " WHERE status = 'OPEN'"), "rows 1, 2 and 4 untouched");
+            assertEquals(3, ((Number) meta().queryForMap("SELECT rows_affected FROM workflow_run WHERE id = ?", run.runId()).get("ROWS_AFFECTED")).intValue(), "update + insert + delete are counted in the run history");
+        } finally {
+            dropFixture();
+        }
+    }
+
+    @Autowired org.springframework.jdbc.core.JdbcTemplate metaDb;
+
+    org.springframework.jdbc.core.JdbcTemplate meta() {
+        return metaDb;
+    }
+
+    @Test
+    void whenTheDatabaseUserLacksPrivilegesTheDatabaseRejectsTheWriteAndItsOwnErrorIsShown() throws Exception {
+        fixture();
+        try {
+            SessionContext.set("s-" + u);
+            ConnectionView c = mysqlAs("wf-limited-", "limited", LIMITED_PW); // this MySQL account has SELECT only
+            connections.connect(c.id(), ACCESS);
+            connections.useDatabase("bank_wallet", DbType.MYSQL);
+
+            SavedQuery update = sqlQuery("lupd-", QueryType.WRITE, "UPDATE " + table + " SET status = ? WHERE id = ?", p("status", ParamType.STRING), p("id", ParamType.INTEGER));
+            SavedQuery insert = sqlQuery("lins-", QueryType.WRITE, "INSERT INTO " + table + " (id, customer_id, scheduled_date, status) VALUES (?, ?, ?, ?)",
+                    p("id", ParamType.INTEGER), p("customer", ParamType.STRING), p("d", ParamType.DATE), p("status", ParamType.STRING));
+            SavedQuery delete = sqlQuery("ldel-", QueryType.WRITE, "DELETE FROM " + table + " WHERE id = ?", p("id", ParamType.INTEGER));
+            SavedQuery select = sqlQuery("lsel-", QueryType.READ, "SELECT COUNT(*) AS n FROM " + table, new QueryParameter[0]);
+            Workflow w = workflows.create(new Workflow(null, "denied-" + u, null, List.of(), List.of(
+                    step(1, "update", update, List.of(), List.of(), new ParamMapping("status", SourceType.CONSTANT, null, null, "HACKED"), new ParamMapping("id", SourceType.CONSTANT, null, null, "1")),
+                    step(2, "insert", insert, List.of(), List.of(), new ParamMapping("id", SourceType.CONSTANT, null, null, "77"), new ParamMapping("customer", SourceType.CONSTANT, null, null, "C100"),
+                            new ParamMapping("d", SourceType.CONSTANT, null, null, "2030-01-01"), new ParamMapping("status", SourceType.CONSTANT, null, null, "HACKED")),
+                    step(3, "delete", delete, List.of(), List.of(), new ParamMapping("id", SourceType.CONSTANT, null, null, "2")),
+                    step(4, "select still works", select, List.of(), List.of())))); 
+
+            RunView run = executor.runNow(w.id(), Map.of(), Map.of(), List.of());
+
+            for (int i = 0; i < 3; i++) {
+                String verb = List.of("UPDATE", "INSERT", "DELETE").get(i);
+                var st = run.steps().get(i);
+                assertEquals("FAILED", st.status(), verb + " must be rejected");
+                assertTrue(st.error().contains("SQLState 42000") && st.error().contains("code 1142") && st.error().contains(verb + " command denied to user 'limited'"),
+                        "the actual MySQL error, not a workflow message: " + st.error());
+            }
+            assertEquals("SUCCESS", run.steps().get(3).status(), "the SELECT privilege is respected too");
+            assertEquals("4", String.valueOf(run.steps().get(3).result().rows().get(0).get(0)));
+            assertEquals("4", scalar("SELECT COUNT(*) FROM " + table), "nothing was inserted or deleted");
+            assertEquals("4", scalar("SELECT COUNT(*) FROM " + table + " WHERE status = 'OPEN'"), "nothing was updated");
+        } finally {
+            dropFixture();
+        }
+    }
+
+    @Test
+    void apiWorkflowSqlStepsAlsoRunWritesDirectly() throws Exception {
+        fixture();
+        try {
+            SessionContext.set("s-" + u);
+            ConnectionView c = mysqlAs("api-wf-write-", MYSQL_USER, MYSQL_PW);
+            connections.connect(c.id(), ACCESS);
+            connections.useDatabase("bank_wallet", DbType.MYSQL);
+            SavedQuery update = sqlQuery("aupd-", QueryType.WRITE, "UPDATE " + table + " SET status = ? WHERE customer_id = ?", p("status", ParamType.STRING), p("customer", ParamType.STRING));
+            SavedQuery check = sqlQuery("achk-", QueryType.READ, "SELECT COUNT(*) AS n FROM " + table + " WHERE status = ?", p("status", ParamType.STRING));
+            var options = new ApiStepOptions(0, 1, 30, 1, List.of(), List.of());
+            ApiWorkflowDef def = apiWorkflows.save(null, new ApiWorkflowDef(null, "api-sql-write-" + u, null, true, 120, List.of(
+                    new ApiWfStep(null, 1, "set status", 0L, null, null, "STOP", true, options, "SQL_QUERY", update.id(), update.name(), Map.of("status", "DONE", "customer", "C100")),
+                    new ApiWfStep(null, 2, "count", 0L, null, null, "STOP", true, options, "SQL_QUERY", check.id(), check.name(), Map.of("status", "DONE")))));
+            String runId = apiRunner.start(def.id(), Map.of());
+            ApiRunView done = apiRunner.get(runId);
+            for (int i = 0; i < 100 && !List.of("SUCCESS", "FAILED").contains(done.status()); i++) {
+                Thread.sleep(100);
+                done = apiRunner.get(runId);
+            }
+            assertEquals("SUCCESS", done.status(), done.error());
+            assertEquals("3", scalar("SELECT COUNT(*) FROM " + table + " WHERE status = 'DONE'"), "three C100 rows were updated for real");
+            assertEquals("1", scalar("SELECT COUNT(*) FROM " + table + " WHERE status = 'OPEN'"));
+        } finally {
+            dropFixture();
+        }
     }
 }

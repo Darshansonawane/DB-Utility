@@ -24,13 +24,22 @@ import java.util.Optional;
 /**
  * The one generic SQL engine. Every statement (editor, saved query, workflow step) goes through here:
  * validation -> typed PreparedStatement binding -> timeout/row limits -> history and audit.
- * Writes additionally need read-only mode off, a preview, a matching single-use confirmation token,
- * run inside a transaction and are rolled back when they exceed the affected-row limit.
+ * Writes from the editor and Saved Queries additionally need read-only mode off, a preview and a matching single-use confirmation
+ * token; workflow steps run them automatically under the database user's privileges. Every write runs inside a transaction, is
+ * rolled back when it exceeds the affected-row limit, and is audited.
  */
 @Service
 public class SqlExecutionService {
-    /** {@code database} (nullable) is the schema this statement must run in; null = the connection's active database. */
-    public record ExecContext(String kind, Long queryId, String queryName, boolean adHoc, String database) {
+    /**
+     * {@code database} (nullable) is the schema this statement must run in; null = the connection's active database.
+     * {@code autoWrite}: workflow steps run INSERT / UPDATE / DELETE directly, with no preview, confirmation token or read-only
+     * toggle. The database user's own privileges are then the only authority: the server accepts or rejects the statement.
+     */
+    public record ExecContext(String kind, Long queryId, String queryName, boolean adHoc, String database, boolean autoWrite) {
+        public ExecContext(String kind, Long queryId, String queryName, boolean adHoc, String database) {
+            this(kind, queryId, queryName, adHoc, database, false);
+        }
+
         public static ExecContext editor() {
             return new ExecContext("SQL_EDITOR", null, null, true, null);
         }
@@ -48,7 +57,7 @@ public class SqlExecutionService {
         }
 
         public static ExecContext workflow(long id, String name, String database) {
-            return new ExecContext("WORKFLOW_STEP", id, name, false, database);
+            return new ExecContext("WORKFLOW_STEP", id, name, false, database, true);
         }
     }
 
@@ -153,16 +162,18 @@ public class SqlExecutionService {
     private QueryResult executeWrite(ParsedSql p, List<BoundParam> params, String token, ExecContext ctx, AppSettings s) {
         ConnectionProfile conn = provider.activeProfile().orElse(null);
         String masked = maskedParams(params, s);
-        String block = writeBlockedReason(ctx, s);
-        if (block != null) {
-            audit.record("WRITE_REJECTED", conn, p.sql(), masked, null, "REJECTED", block);
-            throw ApiException.forbidden(block);
-        }
-        try {
-            confirmations.consume(token, fp(p.sql(), ctx.database()), params, conn == null ? null : conn.id());
-        } catch (ApiException e) {
-            audit.record("WRITE_REJECTED", conn, p.sql(), masked, null, "REJECTED", e.getMessage());
-            throw e;
+        if (!ctx.autoWrite()) { // workflow steps skip this: the database user's privileges decide, and the database reports any refusal
+            String block = writeBlockedReason(ctx, s);
+            if (block != null) {
+                audit.record("WRITE_REJECTED", conn, p.sql(), masked, null, "REJECTED", block);
+                throw ApiException.forbidden(block);
+            }
+            try {
+                confirmations.consume(token, fp(p.sql(), ctx.database()), params, conn == null ? null : conn.id());
+            } catch (ApiException e) {
+                audit.record("WRITE_REJECTED", conn, p.sql(), masked, null, "REJECTED", e.getMessage());
+                throw e;
+            }
         }
         long start = System.nanoTime();
         try (Connection c = open(ctx.database())) {

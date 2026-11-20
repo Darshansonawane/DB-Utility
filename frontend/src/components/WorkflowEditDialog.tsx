@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Button, ToggleButton, ToggleButtonGroup, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Paper,
-  Autocomplete, Box, Stack, TextField, Typography,
+  Autocomplete, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -11,12 +11,15 @@ import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
 import { folderPaths } from './folders/folderUtils';
-import type { ApiRequestDef, Folder, ParamMapping, ParamType, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
+import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
 const EMPTY: Workflow = { name: '', description: '', inputs: [], steps: [] };
 const TYPES: ParamType[] = ['STRING', 'INTEGER', 'DECIMAL', 'DATE', 'DATETIME', 'BOOLEAN'];
 
-interface Props { open: boolean; initial?: Workflow | null; folders: Folder[]; defaultFolderId?: number; allWorkflows: Workflow[]; onClose: () => void; onSaved: () => void }
+interface Props {
+  open: boolean; initial?: Workflow | null; folders: Folder[]; projects?: Project[]; defaultProjectId?: number; defaultFolderId?: number;
+  allWorkflows: Workflow[]; onClose: () => void; onSaved: () => void;
+}
 
 /** Does workflow `wf` (directly or through other workflows) contain a step running workflow `targetId`? */
 function contains(wf: Workflow, targetId: number, all: Workflow[], seen = new Set<number>()): boolean {
@@ -30,7 +33,7 @@ function contains(wf: Workflow, targetId: number, all: Workflow[], seen = new Se
   });
 }
 
-export default function WorkflowEditDialog({ open, initial, folders, defaultFolderId, allWorkflows, onClose, onSaved }: Props) {
+export default function WorkflowEditDialog({ open, initial, folders, projects = [], defaultProjectId, defaultFolderId, allWorkflows, onClose, onSaved }: Props) {
   const [w, setW] = useState<Workflow>(EMPTY);
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [apiRequests, setApiRequests] = useState<ApiRequestDef[]>([]);
@@ -38,7 +41,7 @@ export default function WorkflowEditDialog({ open, initial, folders, defaultFold
 
   useEffect(() => {
     if (!open) return;
-    setW(initial ? structuredClone(initial) : { ...EMPTY, folderId: defaultFolderId ?? 0 });
+    setW(initial ? structuredClone(initial) : { ...EMPTY, folderId: defaultFolderId ?? 0, projectId: defaultProjectId ?? projects[0]?.id ?? null });
     setError(null);
     void run(async () => { setQueries(await api.queries()); setApiRequests(await api.apiRequests()); });
   }, [open, initial, run, setError]);
@@ -93,7 +96,15 @@ export default function WorkflowEditDialog({ open, initial, folders, defaultFold
           <TextField size="small" label="Workflow name" required value={w.name} onChange={(e) => setW({ ...w, name: e.target.value })} />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField size="small" fullWidth label="Description" value={w.description ?? ''} onChange={(e) => setW({ ...w, description: e.target.value })} />
-            <Box sx={{ minWidth: 300 }}><FolderSelect folders={folders} value={w.folderId} onChange={(id) => setW({ ...w, folderId: id })} /></Box>
+          </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {projects.length > 0 && (
+              <TextField size="small" select fullWidth label="Project" required value={w.projectId ?? ''} onChange={(e) => setW({ ...w, projectId: Number(e.target.value), folderId: 0 })}>
+                {projects.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
+              </TextField>
+            )}
+            <FolderSelect folders={folders.filter((f) => !w.projectId || f.projectId === w.projectId)} value={w.folderId} onChange={(id) => setW({ ...w, folderId: id })}
+              noneLabel="No folder (top level of the project)" />
           </Stack>
 
           <Typography variant="subtitle1" fontWeight={700}>Workflow inputs</Typography>

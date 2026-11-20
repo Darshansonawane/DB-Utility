@@ -28,39 +28,62 @@ public class FolderService {
 
     private final JdbcTemplate jdbc;
     private final AuditService audit;
+    private final com.qa.utility.project.ProjectRepository projectRepository;
 
-    public FolderService(JdbcTemplate jdbc, AuditService audit) {
+    public FolderService(JdbcTemplate jdbc, AuditService audit, com.qa.utility.project.ProjectRepository projectRepository) {
         this.jdbc = jdbc;
         this.audit = audit;
+        this.projectRepository = projectRepository;
     }
 
     public List<Folder> list(String kind) {
+        return list(kind, null);
+    }
+
+    /** {@code projectId} (WORKFLOW folders only) limits the list to one project. */
+    public List<Folder> list(String kind, Long projectId) {
         checkKind(kind);
-        return jdbc.query("SELECT id, kind, parent_id, name FROM folder WHERE kind = ? ORDER BY LOWER(name)",
-                (rs, i) -> new Folder(rs.getLong(1), rs.getString(2), rs.getLong(3), rs.getString(4)), kind);
+        String sql = "SELECT id, kind, parent_id, name, project_id FROM folder WHERE kind = ?" + (projectId == null ? "" : " AND project_id = ?") + " ORDER BY LOWER(name)";
+        Object[] args = projectId == null ? new Object[]{kind} : new Object[]{kind, projectId};
+        return jdbc.query(sql, (rs, i) -> new Folder(rs.getLong(1), rs.getString(2), rs.getLong(3), rs.getString(4), rs.getLong(5)), args);
     }
 
     public Folder get(long id) {
-        return jdbc.query("SELECT id, kind, parent_id, name FROM folder WHERE id = ?",
-                (rs, i) -> new Folder(rs.getLong(1), rs.getString(2), rs.getLong(3), rs.getString(4)), id).stream().findFirst()
+        return jdbc.query("SELECT id, kind, parent_id, name, project_id FROM folder WHERE id = ?",
+                (rs, i) -> new Folder(rs.getLong(1), rs.getString(2), rs.getLong(3), rs.getString(4), rs.getLong(5)), id).stream().findFirst()
                 .orElseThrow(() -> ApiException.notFound("Folder not found"));
     }
 
     public Folder create(String kind, Long parentId, String name) {
+        return create(kind, parentId, name, null);
+    }
+
+    /**
+     * WORKFLOW folders belong to a project: the parent folder's project, else {@code projectId}, else the default project. A sub-folder is
+     * always in its parent's project. Other kinds ignore projects.
+     */
+    public Folder create(String kind, Long parentId, String name, Long projectId) {
         checkKind(kind);
         long parent = parentId == null ? 0 : parentId;
         String n = cleanName(name);
+        long project = 0;
         if (parent != 0) {
             Folder p = get(parent);
             if (!p.kind().equals(kind)) throw ApiException.badRequest("Parent folder belongs to a different area");
             if (depth(parent) >= MAX_DEPTH) throw ApiException.badRequest("Folders can be nested at most " + MAX_DEPTH + " levels deep");
+            project = p.projectId();
+            if (kind.equals("WORKFLOW") && projectId != null && projectId != 0 && projectId != project) {
+                throw ApiException.badRequest("The parent folder belongs to a different project");
+            }
+        } else if (kind.equals("WORKFLOW")) {
+            project = projectId == null || projectId == 0 ? defaultProjectId() : requireProjectId(projectId);
         }
         try {
-            jdbc.update("INSERT INTO folder (kind, parent_id, name) VALUES (?,?,?)", kind, parent, n);
+            jdbc.update("INSERT INTO folder (kind, parent_id, name, project_id) VALUES (?,?,?,?)", kind, parent, n, project);
         } catch (DuplicateKeyException e) {
             throw ApiException.conflict("A folder named '" + n + "' already exists here");
         }
-        Long id = jdbc.queryForObject("SELECT id FROM folder WHERE kind = ? AND parent_id = ? AND name = ?", Long.class, kind, parent, n);
+        Long id = jdbc.queryForObject("SELECT id FROM folder WHERE kind = ? AND project_id = ? AND parent_id = ? AND name = ?", Long.class, kind, project, parent, n);
         audit.record("FOLDER_CREATED", null, null, null, null, "SUCCESS", kind + ": " + n);
         return get(id);
     }
@@ -74,6 +97,7 @@ public class FolderService {
             if (parent != 0) {
                 Folder p = get(parent);
                 if (!p.kind().equals(f.kind())) throw ApiException.badRequest("Target folder belongs to a different area");
+                if (p.projectId() != f.projectId()) throw ApiException.badRequest("A folder can only be moved within its own project");
                 if (descendants(id).contains(parent)) throw ApiException.badRequest("A folder cannot be moved into one of its own subfolders");
                 if (depth(parent) + 1 + subtreeHeight(id) > MAX_DEPTH) throw ApiException.badRequest("That would nest folders deeper than " + MAX_DEPTH + " levels");
             }
@@ -103,6 +127,25 @@ public class FolderService {
         jdbc.update("UPDATE " + ITEM_TABLE.get(f.kind()) + " SET folder_id = 0 WHERE folder_id IN (" + in + ")");
         jdbc.update("DELETE FROM folder WHERE id IN (" + in + ")");
         audit.record("FOLDER_DELETED", null, null, null, null, "SUCCESS", f.kind() + ": " + f.name());
+    }
+
+    /** Validates a workflow folder (0 = directly in the project) and that it belongs to {@code projectId}. */
+    public long requireWorkflowFolder(Long folderId, long projectId) {
+        long id = folderId == null ? 0 : folderId;
+        if (id == 0) return 0;
+        Folder f = get(id);
+        if (!f.kind().equals("WORKFLOW")) throw ApiException.badRequest("That folder belongs to a different area");
+        if (f.projectId() != projectId) throw ApiException.badRequest("That folder belongs to a different project");
+        return id;
+    }
+
+    private long defaultProjectId() {
+        return projectRepository.defaultProjectId();
+    }
+
+    private long requireProjectId(long id) {
+        if (!projectRepository.exists(id)) throw ApiException.badRequest("Project not found");
+        return id;
     }
 
     /** Validates that folderId (0 = Unfiled) exists and is of the right kind. */

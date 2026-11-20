@@ -340,10 +340,6 @@ public class WorkflowExecutor {
             return blocked(st, params, sources, "Missing required value(s) - " + String.join("; ", missing));
         }
 
-        if (q.queryType() == QueryType.WRITE) {
-            return simple(st, "FAILED", params, sources, null,
-                    "Write queries are not executed by the workflow engine: they require a preview and explicit confirmation. Run it from Saved Queries.");
-        }
         List<BoundParam> bound;
         try {
             library.checkRunnable(q);
@@ -392,6 +388,12 @@ public class WorkflowExecutor {
             }
         }
         warnings.addAll(extractedVars.problems());
+        if (q.queryType() == QueryType.WRITE) { // INSERT / UPDATE / DELETE: executed for real under the database user's privileges
+            int n = res.affectedRows() == null ? 0 : res.affectedRows();
+            String note = n == 0 ? "0 rows affected: no row matched the statement's WHERE clause." : n + " row" + (n == 1 ? "" : "s") + " affected and committed.";
+            return new StepRunView(st.order(), st.name(), st.description(), q.name(), n == 0 ? "NO_DATA" : "SUCCESS", ms, attempts, params, sources, res,
+                    outputs, n, note, null);
+        }
         String status = res.rowCount() == 0 ? "NO_DATA" : "SUCCESS";
         String message = res.rowCount() == 0 ? "No records found for the given input(s)."
                 : (res.rowCount() > 1 ? res.rowCount() + " rows returned; outputs are taken from the first row. " : "")
@@ -603,6 +605,7 @@ public class WorkflowExecutor {
         List<String> failed = ctx.steps.values().stream().filter(v -> "FAILED".equals(v.status()) || "BLOCKED".equals(v.status()))
                 .map(v -> String.valueOf(v.order())).sorted().toList();
         long executed = ctx.steps.values().stream().filter(v -> DONE.contains(v.status())).count();
+        int modified = ctx.steps.values().stream().filter(v -> v.rowsAffected() != null).mapToInt(StepRunView::rowsAffected).sum();
         String firstError = ctx.steps.values().stream().filter(v -> v.error() != null).map(v -> "Step " + v.order() + ": " + v.error())
                 .findFirst().orElse(null);
         Instant end = ctx.finished != null ? ctx.finished : Instant.now();
@@ -610,8 +613,8 @@ public class WorkflowExecutor {
                 mask(ctx.inputs.get("customerId")), mask(ctx.inputs.get("contributorId")),
                 mask(tracked.get("clientUniqueId")), mask(tracked.get("paymentMasterId")), maskedMap(ctx.inputs),
                 ctx.connection.name(), ctx.connection.environment(), ctx.started, ctx.finished,
-                Duration.between(ctx.started, end).toMillis(), String.join(",", failed), 0,
-                executed + " read-only step(s) completed; no data modified", firstError);
+                Duration.between(ctx.started, end).toMillis(), String.join(",", failed), modified,
+                executed + " step(s) completed; " + (modified == 0 ? "no data modified" : modified + " row(s) modified"), firstError);
     }
 
     private static int parse(String s) {

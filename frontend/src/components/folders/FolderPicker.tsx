@@ -38,8 +38,8 @@ function PickNode({ folders, parentId, depth, selected, onSelect, disabled }: {
 }
 
 /** "Move to…" dialog. `disabled` lists folders that cannot be chosen (for example the folder being moved and its subfolders). */
-export default function FolderPicker({ open, title, folders, current, disabled, onPick, onClose }: {
-  open: boolean; title: string; folders: Folder[]; current?: number; disabled?: Set<number>; onPick: (folderId: number) => void; onClose: () => void;
+export default function FolderPicker({ open, title, folders, current, disabled, onPick, onClose, rootLabel = 'Unfiled (top level)' }: {
+  open: boolean; title: string; folders: Folder[]; current?: number; disabled?: Set<number>; onPick: (folderId: number) => void; onClose: () => void; rootLabel?: string;
 }) {
   const [sel, setSel] = useState<number>(current ?? UNFILED);
   return (
@@ -49,7 +49,7 @@ export default function FolderPicker({ open, title, folders, current, disabled, 
         <List dense disablePadding>
           <ListItemButton dense selected={sel === UNFILED} onClick={() => setSel(UNFILED)}>
             <ListItemIcon sx={{ minWidth: 32 }}><FolderOpenIcon fontSize="small" /></ListItemIcon>
-            <ListItemText primary="Unfiled (top level)" />
+            <ListItemText primary={rootLabel} />
           </ListItemButton>
           <PickNode folders={folders} parentId={0} depth={0} selected={sel} onSelect={setSel} disabled={disabled ?? new Set()} />
         </List>

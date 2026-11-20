@@ -41,8 +41,8 @@ public class WorkflowController {
     }
 
     @PutMapping("/workflows/{id}/folder")
-    public void move(@PathVariable long id, @RequestBody com.qa.utility.folder.FolderDtos.MoveItem b) {
-        service.move(id, b.folderId());
+    public void move(@PathVariable long id, @RequestBody MoveWorkflow b) {
+        service.move(id, b.folderId(), b.projectId());
     }
 
     @DeleteMapping("/workflows/{id}")

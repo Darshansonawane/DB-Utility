@@ -15,9 +15,11 @@ import java.util.*;
 @Repository
 public class WorkflowRepository {
     private final JdbcTemplate jdbc;
+    private final com.qa.utility.project.ProjectRepository projects;
 
-    public WorkflowRepository(JdbcTemplate jdbc) {
+    public WorkflowRepository(JdbcTemplate jdbc, com.qa.utility.project.ProjectRepository projects) {
         this.jdbc = jdbc;
+        this.projects = projects;
     }
 
     public List<Workflow> findAll() {
@@ -33,7 +35,8 @@ public class WorkflowRepository {
     }
 
     public Optional<Workflow> findById(long id) {
-        return jdbc.query("SELECT * FROM workflow WHERE id = ?", (rs, i) -> new Object[]{rs.getString("name"), rs.getString("description"), rs.getLong("folder_id")}, id)
+        return jdbc.query("SELECT * FROM workflow WHERE id = ?", (rs, i) -> new Object[]{rs.getString("name"), rs.getString("description"), rs.getLong("folder_id"), rs.getLong("project_id"),
+                        rs.getTimestamp("updated_at") == null ? null : rs.getTimestamp("updated_at").toInstant()}, id)
                 .stream().findFirst().map(h -> {
                     List<WorkflowInput> inputs = jdbc.query("SELECT * FROM workflow_input WHERE workflow_id = ? ORDER BY input_order",
                             (r, i) -> new WorkflowInput(r.getString("name"), r.getString("label"), ParamType.valueOf(r.getString("param_type")), r.getBoolean("required")), id);
@@ -55,17 +58,26 @@ public class WorkflowRepository {
                                         r.getString("api_name"), parseOptions(r.getString("api_options_json")),
                                         subId, r.getString("sub_name"));
                             }, id);
-                    return new Workflow(id, (String) h[0], (String) h[1], inputs, steps, (Long) h[2]);
+                    String lastStatus = null;
+                    java.time.Instant lastRunAt = null;
+                    var last = jdbc.queryForList("SELECT status, started_at FROM workflow_run WHERE workflow_id = ? ORDER BY started_at DESC LIMIT 1", id);
+                    if (!last.isEmpty()) {
+                        lastStatus = (String) last.get(0).get("STATUS");
+                        Object started = last.get(0).get("STARTED_AT");
+                        if (started instanceof java.sql.Timestamp t) lastRunAt = t.toInstant();
+                    }
+                    return new Workflow(id, (String) h[0], (String) h[1], inputs, steps, (Long) h[2], (Long) h[3], (java.time.Instant) h[4], lastStatus, lastRunAt);
                 });
     }
 
     public long insert(Workflow w) {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
-            PreparedStatement ps = con.prepareStatement("INSERT INTO workflow (name, description, folder_id) VALUES (?,?,?)", Statement.RETURN_GENERATED_KEYS);
+            PreparedStatement ps = con.prepareStatement("INSERT INTO workflow (name, description, folder_id, project_id) VALUES (?,?,?,?)", Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, w.name());
             ps.setString(2, w.description());
             ps.setLong(3, w.folderId() == null ? 0 : w.folderId());
+            ps.setLong(4, w.projectId() == null || w.projectId() == 0 ? projects.defaultProjectId() : w.projectId());
             return ps;
         }, kh);
         long id = ((Number) kh.getKeys().get(kh.getKeys().containsKey("id") ? "id" : kh.getKeys().keySet().iterator().next())).longValue();
@@ -74,14 +86,23 @@ public class WorkflowRepository {
     }
 
     public void update(long id, Workflow w) {
-        jdbc.update("UPDATE workflow SET name=?, description=?, folder_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", w.name(), w.description(), w.folderId() == null ? 0 : w.folderId(), id);
+        jdbc.update("UPDATE workflow SET name=?, description=?, folder_id=?, project_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", w.name(), w.description(),
+                w.folderId() == null ? 0 : w.folderId(), w.projectId() == null || w.projectId() == 0 ? projects.defaultProjectId() : w.projectId(), id);
         jdbc.update("DELETE FROM workflow_input WHERE workflow_id = ?", id);
         jdbc.update("DELETE FROM workflow_step WHERE workflow_id = ?", id); // mappings cascade
         saveChildren(id, w);
     }
 
     public void move(long id, long folderId) {
-        jdbc.update("UPDATE workflow SET folder_id = ? WHERE id = ?", folderId, id);
+        jdbc.update("UPDATE workflow SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", folderId, id);
+    }
+
+    public void move(long id, long projectId, long folderId) {
+        jdbc.update("UPDATE workflow SET project_id = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", projectId, folderId, id);
+    }
+
+    public boolean nameTaken(long projectId, String name, long exceptId) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM workflow WHERE project_id = ? AND name = ? AND id <> ?", Integer.class, projectId, name, exceptId) > 0;
     }
 
     /** Names of the workflows that contain a step running workflow {@code id}. */

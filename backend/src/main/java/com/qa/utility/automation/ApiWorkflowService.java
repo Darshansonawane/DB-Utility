@@ -72,8 +72,7 @@ public class ApiWorkflowService {
         for (ApiWfStep s : w.steps()) {
             if (!orders.add(s.order())) throw ApiException.badRequest("Duplicate step order " + s.order());
             if (s.isSql()) {
-                var q = queries.findById(s.queryId() == null ? -1 : s.queryId()).orElseThrow(() -> ApiException.badRequest("Step " + s.order() + ": SQL query not found"));
-                if (q.queryType() == com.qa.utility.model.QueryType.WRITE) throw ApiException.badRequest("Step " + s.order() + ": workflows only run read-only (SELECT) queries");
+                queries.findById(s.queryId() == null ? -1 : s.queryId()).orElseThrow(() -> ApiException.badRequest("Step " + s.order() + ": SQL query not found"));
             } else {
                 requests.request(s.requestId()).orElseThrow(() -> ApiException.badRequest("Step " + s.order() + ": API request not found"));
             }

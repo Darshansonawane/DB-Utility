@@ -95,7 +95,14 @@ export interface WorkflowStep {
   stepType?: 'QUERY' | 'API_REQUEST' | 'WORKFLOW'; apiRequestId?: number | null; apiRequestName?: string; apiOptions?: ApiStepOptions | null;
   subWorkflowId?: number | null; subWorkflowName?: string;
 }
-export interface Workflow { id?: number; name: string; description?: string; inputs: WorkflowInput[]; steps: WorkflowStep[]; folderId?: number | null }
+export interface Workflow {
+  id?: number; name: string; description?: string; inputs: WorkflowInput[]; steps: WorkflowStep[]; folderId?: number | null;
+  /** owning project (optional when saving: a folder's project, else the default project) */
+  projectId?: number | null;
+  /** read-only: last change, and the most recent run (null/undefined lastStatus = never run) */
+  updatedAt?: string | null; lastStatus?: string | null; lastRunAt?: string | null;
+}
+export interface Project { id: number; name: string; description?: string | null; folderCount: number; workflowCount: number; createdAt?: string; updatedAt?: string }
 
 export type StepStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'NO_DATA' | 'FAILED' | 'BLOCKED' | 'STOPPED' | 'SKIPPED';
 export interface StepRunView {
@@ -165,7 +172,7 @@ export interface WorkflowReport {
 export interface OverviewRow { workflowId: number; workflowName: string; steps: number; runs: number; passRate: number; avgMs: number; lastStatus?: string; lastRunAt?: string }
 
 export type FolderKind = 'REQUEST' | 'API_WORKFLOW' | 'VARIABLE' | 'INFO' | 'WORKFLOW';
-export interface Folder { id: number; kind: FolderKind; parentId: number; name: string }
+export interface Folder { id: number; kind: FolderKind; parentId: number; name: string; projectId?: number }
 export interface VariableBody { name?: string; value?: string | null; secret: boolean; scope: string; folderId?: number | null; environment?: string }
 export interface TokenInfo { token: string; name: string; found: boolean; value?: string | null; origin: string; secret: boolean }
 export interface PreviewResult { method: string; url: string; headers: Record<string, string>; body?: string | null; tokens: TokenInfo[]; ready: boolean }

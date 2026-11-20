@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Runs a saved read-only SQL query as a workflow step: parameters come from {{variables}} (parameterised binding, never string
+ * Runs a saved SQL query (SELECT, or INSERT / UPDATE / DELETE executed directly under the database user's privileges) as a workflow step: parameters come from {{variables}} (parameterised binding, never string
  * concatenation), the query is retried until a row exists when more than one attempt is allowed, and the query's extractions are
  * saved as variables. Wait / poll interval / timeout / attempts come from the step options.
  */
@@ -40,7 +40,7 @@ public class SqlStepRunner {
         ApiStepOptions opt = (raw == null ? ApiStepOptions.defaults() : raw).normalised();
         int maxAttempts = opt.maxAttempts();
         String label = "DB " + (q.databaseName() != null ? q.databaseName() : provider.activeProfile().map(p -> p.databaseName()).orElse("?"));
-        if (q.queryType() == QueryType.WRITE) return fail(label, 0, maxAttempts, "Workflows only run read-only (SELECT) queries", 0);
+        boolean write = q.queryType() == QueryType.WRITE;
         if (opt.waitBeforeSeconds() > 0) {
             live.accept("Waiting " + opt.waitBeforeSeconds() + "s before the query");
             if (!control.sleep(opt.waitBeforeSeconds() * 1000L)) return stopped(control, label, 0, maxAttempts);
@@ -66,7 +66,13 @@ public class SqlStepRunner {
                 reason = null;
             } catch (ApiException e) {
                 if (e.getMessage() != null && e.getMessage().startsWith("Not connected")) return fail(label, attempt, maxAttempts, e.getMessage(), ms(t0));
+                if (write) return fail(label, attempt, maxAttempts, e.getMessage(), ms(t0)); // the database refused or failed the write: report it, never re-run a write
                 reason = e.getMessage();
+            }
+            if (res != null && write) { // INSERT / UPDATE / DELETE ran and committed: no rows to wait for
+                int n = res.affectedRows() == null ? 0 : res.affectedRows();
+                return new ApiStepRunner.Outcome(true, false, false, attempt, maxAttempts,
+                        new ApiRunResult(q.name(), true, null, ms(t0), label + " · " + n + " row(s) affected", Map.of(), null, false, List.of(), null, List.of(), null), null);
             }
             if (res != null) {
                 boolean needsRow = !q.extractions().isEmpty() || maxAttempts > 1;

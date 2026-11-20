@@ -193,17 +193,107 @@ class WorkflowExecutorTest extends AbstractDbTest {
         assertEquals("SKIPPED", step(r, 2).status());
     }
 
+    private SavedQuery writeQuery(String name, String sql, QueryParameter... params) {
+        return library.create(new SavedQuery(null, name + UUID.randomUUID(), "", "Test", sql, QueryType.WRITE, List.of(), true, List.of(params)));
+    }
+
+    private static QueryParameter prm(String name, ParamType t) {
+        return new QueryParameter(name, name, t, true, null);
+    }
+
+    private static ParamMapping constant(String param, String value) {
+        return new ParamMapping(param, SourceType.CONSTANT, null, null, value);
+    }
+
+    private static ParamMapping fromStep(String param, int step, String field) {
+        return new ParamMapping(param, SourceType.STEP_OUTPUT, String.valueOf(step), field, null);
+    }
+
+    private long newWorkflow(List<WorkflowStep> steps) {
+        return workflows.insert(new Workflow(null, "w" + UUID.randomUUID(), "", List.of(), steps));
+    }
+
     @Test
-    void writeQueriesAreNeverRunByTheWorkflowEngine() {
-        SavedQuery upd = library.create(new SavedQuery(null, "wf-upd" + UUID.randomUUID(), "", "Test",
-                "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", QueryType.WRITE, List.of(), true,
-                List.of(new QueryParameter("hr_id", "HR", ParamType.STRING, true, null), new QueryParameter("id", "ID", ParamType.INTEGER, true, null))));
-        allowWrites();
-        long id = workflows.insert(new Workflow(null, "w" + UUID.randomUUID(), "", List.of(), List.of(
-                new WorkflowStep(null, 1, "update", null, upd.id(), null, List.of(), 0, 0, false, List.of(), List.of(
-                        new ParamMapping("hr_id", SourceType.CONSTANT, null, null, "HRX"), new ParamMapping("id", SourceType.CONSTANT, null, null, "1"))))));
+    void updateInsertAndDeleteRunDirectlyInAWorkflowWithNoConfirmationAndEvenInReadOnlyMode() {
+        assertTrue(settings.get().readOnlyMode(), "the default read-only switch is ON: workflows must not depend on it");
+        SavedQuery sel = library.create(new SavedQuery(null, "wf-sel" + UUID.randomUUID(), "", "Test", "SELECT id FROM bank_wallet.savings_wallet_schedule WHERE customer_id = ? ORDER BY id",
+                QueryType.READ, List.of(), true, List.of(prm("customer_id", ParamType.STRING))));
+        SavedQuery upd = writeQuery("wf-upd", "UPDATE bank_wallet.savings_wallet_schedule SET scheduled_date = ? WHERE id = ?", prm("scheduled_date", ParamType.DATE), prm("id", ParamType.INTEGER));
+        SavedQuery ins = writeQuery("wf-ins", "INSERT INTO employee_transaction (id, hr_id, transaction_id, transaction_date) VALUES (?, ?, ?, ?)",
+                prm("id", ParamType.INTEGER), prm("hr_id", ParamType.STRING), prm("transaction_id", ParamType.STRING), prm("d", ParamType.DATE));
+        SavedQuery del = writeQuery("wf-del", "DELETE FROM employee_transaction WHERE id = ?", prm("id", ParamType.INTEGER));
+        long id = newWorkflow(List.of(
+                new WorkflowStep(null, 1, "fetch schedule", null, sel.id(), null, List.of(), 0, 0, false, List.of(new OutputField("scheduleId", "id")),
+                        List.of(constant("customer_id", "C100"))),
+                new WorkflowStep(null, 2, "update schedule date", null, upd.id(), null, List.of(1), 0, 0, false, List.of(),
+                        List.of(constant("scheduled_date", "2020-01-31"), fromStep("id", 1, "scheduleId"))),
+                new WorkflowStep(null, 3, "insert", null, ins.id(), null, List.of(2), 0, 0, false, List.of(),
+                        List.of(constant("id", "99"), constant("hr_id", "HR9"), constant("transaction_id", "T99"), constant("d", "2024-06-06"))),
+                new WorkflowStep(null, 4, "delete", null, del.id(), null, List.of(3), 0, 0, false, List.of(), List.of(constant("id", "3")))));
+
+        RunView r = executor.runNow(id, Map.of(), null, null);
+
+        assertEquals("SUCCESS", r.status(), r.steps().toString());
+        assertEquals("1", step(r, 2).params().get("id"), "the id captured by step 1 was passed to the UPDATE");
+        assertEquals(1, step(r, 2).rowsAffected());
+        assertEquals("1 row affected and committed.", step(r, 2).message());
+        // the changes really are in the target database
+        assertEquals("2020-01-31", db.queryForObject("SELECT CAST(scheduled_date AS VARCHAR) FROM bank_wallet.savings_wallet_schedule WHERE id = 1", String.class));
+        assertEquals("2024-05-01", db.queryForObject("SELECT CAST(scheduled_date AS VARCHAR) FROM bank_wallet.savings_wallet_schedule WHERE id = 2", String.class), "other rows untouched");
+        assertEquals("HR9", db.queryForObject("SELECT hr_id FROM employee_transaction WHERE id = 99", String.class));
+        assertEquals(0, db.queryForObject("SELECT COUNT(*) FROM employee_transaction WHERE id = 3", Integer.class));
+        // history: rows modified are recorded, the audit log shows the executed writes
+        Map<String, Object> run = meta.queryForMap("SELECT * FROM workflow_run WHERE id = ?", r.runId());
+        assertEquals(3, ((Number) run.get("ROWS_AFFECTED")).intValue());
+        assertTrue(String.valueOf(run.get("OPERATIONS")).contains("3 row(s) modified"));
+        assertTrue(meta.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action = 'WRITE_EXECUTE' AND detail LIKE ?", Integer.class, "WORKFLOW_STEP%") >= 3);
+    }
+
+    @Test
+    void aWriteThatMatchesNoRowsIsReportedNotHidden() {
+        SavedQuery upd = writeQuery("wf-none", "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", prm("hr_id", ParamType.STRING), prm("id", ParamType.INTEGER));
+        long id = newWorkflow(List.of(new WorkflowStep(null, 1, "update", null, upd.id(), null, List.of(), 0, 0, false, List.of(),
+                List.of(constant("hr_id", "X"), constant("id", "12345")))));
+        RunView r = executor.runNow(id, Map.of(), null, null);
+        assertEquals("NO_DATA", step(r, 1).status());
+        assertEquals(0, step(r, 1).rowsAffected());
+        assertTrue(step(r, 1).message().startsWith("0 rows affected"));
+    }
+
+    @Test
+    void theDatabaseRefusingAWriteIsReportedWithItsOwnErrorAndNothingChanges() {
+        SavedQuery bad = writeQuery("wf-bad", "UPDATE employee_transaction SET no_such_column = ? WHERE id = ?", prm("v", ParamType.STRING), prm("id", ParamType.INTEGER));
+        SavedQuery ok = writeQuery("wf-ok", "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", prm("hr_id", ParamType.STRING), prm("id", ParamType.INTEGER));
+        long id = newWorkflow(List.of(
+                new WorkflowStep(null, 1, "bad update", null, bad.id(), null, List.of(), 0, 0, false, List.of(), List.of(constant("v", "x"), constant("id", "1"))),
+                new WorkflowStep(null, 2, "good update", null, ok.id(), null, List.of(), 0, 0, false, List.of(), List.of(constant("hr_id", "HRZ"), constant("id", "2")))));
         RunView r = executor.runNow(id, Map.of(), null, null);
         assertEquals("FAILED", step(r, 1).status());
+        assertTrue(step(r, 1).error().startsWith("SQL error ("), step(r, 1).error());
+        assertTrue(step(r, 1).error().toLowerCase().contains("no_such_column"), "the database's own message: " + step(r, 1).error());
+        assertEquals("HR1", db.queryForObject("SELECT hr_id FROM employee_transaction WHERE id = 1", String.class));
+        assertEquals("SUCCESS", step(r, 2).status(), "a later independent step still runs");
+        assertEquals("HRZ", db.queryForObject("SELECT hr_id FROM employee_transaction WHERE id = 2", String.class));
+    }
+
+    @Test
+    void stopOnFailureStillHaltsAfterAFailedWriteAndTheStatementChecksStillApply() {
+        SavedQuery bad = writeQuery("wf-bad2", "UPDATE employee_transaction SET no_such_column = ? WHERE id = ?", prm("v", ParamType.STRING), prm("id", ParamType.INTEGER));
+        SavedQuery ok = writeQuery("wf-ok2", "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", prm("hr_id", ParamType.STRING), prm("id", ParamType.INTEGER));
+        long id = newWorkflow(List.of(
+                new WorkflowStep(null, 1, "bad", null, bad.id(), null, List.of(), 0, 0, true, List.of(), List.of(constant("v", "x"), constant("id", "1"))),
+                new WorkflowStep(null, 2, "never runs", null, ok.id(), null, List.of(), 0, 0, false, List.of(), List.of(constant("hr_id", "HRQ"), constant("id", "2")))));
+        RunView r = executor.runNow(id, Map.of(), null, null);
+        assertEquals("SKIPPED", step(r, 2).status());
+        assertEquals("HR1", db.queryForObject("SELECT hr_id FROM employee_transaction WHERE id = 2", String.class), "the skipped step changed nothing");
+        // an UPDATE without WHERE is still refused when the query is saved (syntax guard, not a permission)
+        assertThrows(ApiException.class, () -> writeQuery("wf-nowhere", "UPDATE employee_transaction SET hr_id = ?", prm("hr_id", ParamType.STRING)));
+    }
+
+    @Test
+    void savedQueriesAndTheEditorStillNeedAPreviewAndConfirmation() {
+        SavedQuery upd = writeQuery("manual", "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", prm("hr_id", ParamType.STRING), prm("id", ParamType.INTEGER));
+        assertThrows(ApiException.class, () -> library.execute(upd.id(), Map.of("hr_id", "Z", "id", "1"), null), "read-only mode and no token: refused, as before");
         assertEquals("HR1", db.queryForObject("SELECT hr_id FROM employee_transaction WHERE id = 1", String.class));
     }
 

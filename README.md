@@ -3,6 +3,7 @@
 A local web tool for banking QA: connect to **QA/Staging/Development** MySQL and MongoDB databases (several at once, each protected by its own access password) over your VPN, save SQL once, and run it from generated forms, with previewed and audited writes, multi-step workflows and automatic ID passing.
 
 - **One generic engine**: no per-query REST endpoints or React components. Save a query with its parameter definitions and the form appears.
+- **Projects → Folders → Workflows**: organise automation by application; workflow steps can run SELECT, INSERT, UPDATE and DELETE under the database user's privileges.
 - **Savings Wallet workflow** (7 read-only steps) is seeded on first start.
 - **Safe by default**: read-only mode, parameterised SQL, preview + confirmation + row limit + audit for every write.
 

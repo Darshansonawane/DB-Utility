@@ -16,13 +16,13 @@ public class FolderController {
     }
 
     @GetMapping
-    public List<Folder> list(@RequestParam String kind) {
-        return service.list(kind);
+    public List<Folder> list(@RequestParam String kind, @RequestParam(required = false) Long projectId) {
+        return service.list(kind, projectId);
     }
 
     @PostMapping
     public Folder create(@Valid @RequestBody CreateFolder r) {
-        return service.create(r.kind(), r.parentId(), r.name());
+        return service.create(r.kind(), r.parentId(), r.name(), r.projectId());
     }
 
     @PutMapping("/{id}")
