@@ -23,6 +23,7 @@
     <!-- Embedded store for the tool's own metadata (queries, workflows, history, audit). Never used for banking data. -->
     <dependency><groupId>com.h2database</groupId><artifactId>h2</artifactId></dependency>
     <!-- JavaScript engine for sandboxed pre-request scripts (no Java access is exposed to scripts). -->
+    <dependency><groupId>org.mongodb</groupId><artifactId>mongodb-driver-sync</artifactId></dependency>
     <dependency><groupId>org.mozilla</groupId><artifactId>rhino</artifactId><version>1.7.15</version></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
   </dependencies>

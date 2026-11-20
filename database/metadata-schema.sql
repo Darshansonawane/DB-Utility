@@ -296,3 +296,17 @@ CREATE TABLE IF NOT EXISTS info_item (
 -- Workflow Manager: folders for main / micro business flows, and nested workflows (a step that runs another workflow).
 ALTER TABLE workflow ADD COLUMN IF NOT EXISTS folder_id BIGINT DEFAULT 0 NOT NULL;
 ALTER TABLE workflow_step ADD COLUMN IF NOT EXISTS sub_workflow_id BIGINT;
+
+-- ---------------------------------------------------------------- multi-database connections (MySQL + MongoDB)
+-- A connection has its own ACCESS password (stored only as a salted PBKDF2 hash) that must be entered to use, test, edit or delete it.
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS db_type VARCHAR(10) DEFAULT 'MYSQL' NOT NULL;
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS owner_name VARCHAR(100);
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS access_password_hash VARCHAR(300);
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS uri_encrypted VARCHAR(4096);   -- MongoDB connection string, envelope-encrypted (may embed credentials)
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS auth_database VARCHAR(128);
+ALTER TABLE connection_profile ADD COLUMN IF NOT EXISTS tls BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE connection_profile ALTER COLUMN password_encrypted SET NULL;
+ALTER TABLE connection_profile ALTER COLUMN username SET NULL;
+
+-- Saved queries can target MongoDB: sql_text then holds a JSON query spec.
+ALTER TABLE saved_query ADD COLUMN IF NOT EXISTS engine VARCHAR(10) DEFAULT 'MYSQL' NOT NULL;

@@ -58,7 +58,7 @@ public class SavedQueryRepository {
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO saved_query (name, description, category, sql_text, query_type, environments, enabled, database_name, extractions_json) VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO saved_query (name, description, category, sql_text, query_type, environments, enabled, database_name, extractions_json, engine) VALUES (?,?,?,?,?,?,?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, q.name());
             ps.setString(2, q.description());
@@ -69,6 +69,7 @@ public class SavedQueryRepository {
             ps.setBoolean(7, q.enabled());
             ps.setString(8, q.databaseName());
             ps.setString(9, writeExtractions(q.extractions()));
+            ps.setString(10, q.engine().name());
             return ps;
         }, kh);
         long id = ((Number) kh.getKeys().get(kh.getKeys().containsKey("id") ? "id" : kh.getKeys().keySet().iterator().next())).longValue();
@@ -77,8 +78,8 @@ public class SavedQueryRepository {
     }
 
     public void update(long id, SavedQuery q) {
-        jdbc.update("UPDATE saved_query SET name=?, description=?, category=?, sql_text=?, query_type=?, environments=?, enabled=?, database_name=?, extractions_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                q.name(), q.description(), q.category(), q.sql(), q.queryType().name(), String.join(",", q.environments()), q.enabled(), q.databaseName(), writeExtractions(q.extractions()), id);
+        jdbc.update("UPDATE saved_query SET name=?, description=?, category=?, sql_text=?, query_type=?, environments=?, enabled=?, database_name=?, extractions_json=?, engine=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                q.name(), q.description(), q.category(), q.sql(), q.queryType().name(), String.join(",", q.environments()), q.enabled(), q.databaseName(), writeExtractions(q.extractions()), q.engine().name(), id);
         jdbc.update("DELETE FROM query_parameter WHERE query_id = ?", id);
         saveParams(id, q.parameters());
     }
@@ -130,6 +131,6 @@ public class SavedQueryRepository {
                 (r, i) -> new QueryParameter(r.getString("name"), r.getString("label"), ParamType.valueOf(r.getString("param_type")),
                         r.getBoolean("required"), r.getString("default_value")), id);
         return new SavedQuery(id, rs.getString("name"), rs.getString("description"), rs.getString("category"),
-                rs.getString("sql_text"), QueryType.valueOf(rs.getString("query_type")), envList, rs.getBoolean("enabled"), rs.getString("database_name"), params, readExtractions(rs.getString("extractions_json")));
+                rs.getString("sql_text"), QueryType.valueOf(rs.getString("query_type")), envList, rs.getBoolean("enabled"), rs.getString("database_name"), params, readExtractions(rs.getString("extractions_json")), DbType.parse(rs.getString("engine")));
     }
 }

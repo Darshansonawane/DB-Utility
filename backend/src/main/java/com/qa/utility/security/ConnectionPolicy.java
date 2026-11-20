@@ -20,7 +20,9 @@ public class ConnectionPolicy {
 
     public String normaliseEnvironment(String env) {
         String e = env == null ? "" : env.trim().toUpperCase(Locale.ROOT);
-        if (props.allowedEnvironments().stream().noneMatch(a -> a.equalsIgnoreCase(e))) {
+        if (e.equals("DEVELOPMENT")) e = "DEV";
+        final String env2 = e;
+        if (props.allowedEnvironments().stream().noneMatch(a -> a.equalsIgnoreCase(env2))) {
             throw ApiException.badRequest("Environment '" + env + "' is not approved. Allowed: " + props.allowedEnvironments());
         }
         return e;

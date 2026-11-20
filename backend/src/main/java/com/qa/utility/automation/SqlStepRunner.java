@@ -62,7 +62,7 @@ public class SqlStepRunner {
             }
             QueryResult res = null;
             try {
-                res = sql.execute(q.sql(), bound, null, ExecContext.workflow(q.id(), workflowName + " / " + stepName, q.databaseName()));
+                res = library.run(q, bound, null, ExecContext.workflow(q.id(), workflowName + " / " + stepName, q.databaseName()));
                 reason = null;
             } catch (ApiException e) {
                 if (e.getMessage() != null && e.getMessage().startsWith("Not connected")) return fail(label, attempt, maxAttempts, e.getMessage(), ms(t0));

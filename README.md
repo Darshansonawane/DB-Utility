@@ -1,6 +1,6 @@
 # FlowNexus
 
-A local web tool for banking QA: connect to a **QA/UAT** MySQL database over your VPN, save SQL once, and run it from generated forms, with previewed and audited writes, multi-step workflows and automatic ID passing.
+A local web tool for banking QA: connect to **QA/UAT/Dev** MySQL and MongoDB databases (several at once, each protected by its own access password) over your VPN, save SQL once, and run it from generated forms, with previewed and audited writes, multi-step workflows and automatic ID passing.
 
 - **One generic engine**: no per-query REST endpoints or React components. Save a query with its parameter definitions and the form appears.
 - **Savings Wallet workflow** (7 read-only steps) is seeded on first start.
@@ -8,7 +8,7 @@ A local web tool for banking QA: connect to a **QA/UAT** MySQL database over you
 
 | | |
 |---|---|
-| Backend | Java 21, Spring Boot 3.3, Spring JDBC, MySQL Connector/J (`backend/`) |
+| Backend | Java 21, Spring Boot 3.3, Spring JDBC, MySQL Connector/J, MongoDB Java driver (`backend/`) |
 | Frontend | React 18, TypeScript, Vite, MUI, Axios, React Router, Monaco (`frontend/`) |
 | Metadata | Embedded H2 file DB, script in `database/metadata-schema.sql` |
 

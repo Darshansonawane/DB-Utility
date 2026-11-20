@@ -50,7 +50,10 @@ export default function SavedQueries() {
               <TableRow key={q.id} hover>
                 <TableCell><b>{q.name}</b><Typography variant="caption" display="block" color="text.secondary">{q.description}</Typography></TableCell>
                 <TableCell>{q.category}{q.databaseName && <Chip size="small" variant="outlined" label={q.databaseName} sx={{ ml: 1 }} />}</TableCell>
-                <TableCell><Chip size="small" label={q.queryType} color={q.queryType === 'WRITE' ? 'warning' : 'default'} /></TableCell>
+                <TableCell>
+                  <Chip size="small" label={q.queryType} color={q.queryType === 'WRITE' ? 'warning' : 'default'} />
+                  {q.engine === 'MONGODB' && <Chip size="small" variant="outlined" color="secondary" label="MongoDB" sx={{ ml: 0.5 }} />}
+                </TableCell>
                 <TableCell>{q.parameters.map((p) => p.label).join(', ')}</TableCell>
                 <TableCell>{q.environments.length ? q.environments.join(', ') : 'all'}</TableCell>
                 <TableCell><Switch size="small" checked={q.enabled} inputProps={{ 'aria-label': `enable ${q.name}` }} onChange={async (e) => { await run(() => api.setQueryEnabled(q.id!, e.target.checked)); await load(); }} /></TableCell>

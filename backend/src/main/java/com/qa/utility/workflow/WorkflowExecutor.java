@@ -55,6 +55,8 @@ public class WorkflowExecutor {
         final VarScope scope;
         final RunContext parent;
         final int depth;
+        /** Browser session that started the run: only it may read or control the run, and it supplies the run's connections. */
+        final String sessionId = com.qa.utility.security.SessionContext.current();
         volatile boolean stop;
         volatile String status = "INCOMPLETE";
         volatile Instant finished;
@@ -80,10 +82,13 @@ public class WorkflowExecutor {
     private final TargetDataSourceProvider provider;
     private final ApiAutomationRepository apiRequests;
     private final ApiStepRunner apiSteps;
+    private final com.qa.utility.service.MongoTargetProvider mongoProvider;
 
     public WorkflowExecutor(AppProperties props, WorkflowService workflows, SavedQueryRepository queries, QueryLibraryService library,
                             SqlExecutionService sql, HistoryRepository history, SettingsService settings, TargetDataSourceProvider provider,
-                            ApiAutomationRepository apiRequests, ApiStepRunner apiSteps) {
+                            ApiAutomationRepository apiRequests, ApiStepRunner apiSteps,
+                            com.qa.utility.service.MongoTargetProvider mongoProvider) {
+        this.mongoProvider = mongoProvider;
         this.apiRequests = apiRequests;
         this.apiSteps = apiSteps;
         int cap = Math.max(5, props.runContextCapacity());
@@ -154,7 +159,7 @@ public class WorkflowExecutor {
 
     private RunContext create(long workflowId, Map<String, String> inputs) {
         Workflow w = workflows.get(workflowId);
-        ConnectionProfile conn = provider.activeProfile()
+        ConnectionProfile conn = provider.activeProfile().or(() -> mongoProvider.activeProfile())
                 .orElseThrow(() -> ApiException.conflict("Not connected. Connect to a QA/UAT database before running a workflow."));
         Map<String, String> in = new LinkedHashMap<>();
         for (WorkflowInput wi : w.inputs()) {
@@ -172,7 +177,9 @@ public class WorkflowExecutor {
 
     private RunContext context(String runId) {
         RunContext c = store.get(runId);
-        if (c == null) throw ApiException.notFound("Run not found or its in-memory results expired. Start a new run.");
+        if (c == null || (c.sessionId != null && !c.sessionId.equals(com.qa.utility.security.SessionContext.current()))) {
+            throw ApiException.notFound("Run not found or its in-memory results expired. Start a new run.");
+        }
         return c;
     }
 
@@ -203,7 +210,7 @@ public class WorkflowExecutor {
         if (!ctx.running.compareAndSet(false, true)) throw ApiException.conflict("This run is still executing");
         for (Integer o : selected) ctx.steps.remove(o); // shown as PENDING until picked up
         ctx.status = "RUNNING";
-        pool.submit(() -> runSteps(ctx, selected));
+        pool.submit(() -> com.qa.utility.security.SessionContext.runAs(ctx.sessionId, () -> runSteps(ctx, selected)));
     }
 
     void runSteps(RunContext ctx, Set<Integer> selected) {
@@ -352,7 +359,7 @@ public class WorkflowExecutor {
         while (attempts < max) {
             attempts++;
             try {
-                res = sql.execute(q.sql(), bound, null, ExecContext.workflow(q.id(), ctx.workflow.name() + " / " + st.name(), q.databaseName()));
+                res = library.run(q, bound, null, ExecContext.workflow(q.id(), ctx.workflow.name() + " / " + st.name(), q.databaseName()));
                 error = null;
                 break;
             } catch (ApiException e) {

@@ -26,14 +26,15 @@ public class ConnectionController {
         return service.create(r);
     }
 
+    /** Needs the connection's current access password in {@code accessPassword}. */
     @PutMapping("/{id}")
     public ConnectionView update(@PathVariable long id, @Valid @RequestBody ConnectionRequest r) {
         return service.update(id, r);
     }
 
     @DeleteMapping("/{id}")
-    public void delete(@PathVariable long id) {
-        service.delete(id);
+    public void delete(@PathVariable long id, @RequestBody(required = false) AccessRequest r) {
+        service.delete(id, r == null ? null : r.accessPassword());
     }
 
     @PostMapping("/test")
@@ -42,23 +43,46 @@ public class ConnectionController {
     }
 
     @PostMapping("/{id}/test")
-    public TestResult test(@PathVariable long id) {
-        return service.testSaved(id);
+    public TestResult test(@PathVariable long id, @RequestBody(required = false) AccessRequest r) {
+        return service.testSaved(id, r == null ? null : r.accessPassword());
     }
 
     @PostMapping("/{id}/connect")
-    public StatusView connect(@PathVariable long id) {
-        return service.connect(id);
+    public StatusView connect(@PathVariable long id, @RequestBody(required = false) AccessRequest r) {
+        return service.connect(id, r == null ? null : r.accessPassword());
     }
 
+    @PostMapping("/{id}/disconnect")
+    public StatusView disconnect(@PathVariable long id) {
+        return service.disconnect(id);
+    }
+
+    @PostMapping("/{id}/activate")
+    public StatusView activate(@PathVariable long id) {
+        return service.activate(id);
+    }
+
+    @PostMapping("/{id}/access-password")
+    public ConnectionView setAccessPassword(@PathVariable long id, @RequestBody SetAccessPasswordRequest r) {
+        return service.setAccessPassword(id, r.newAccessPassword());
+    }
+
+    /** Disconnects every connection of this browser session. */
     @PostMapping("/disconnect")
-    public StatusView disconnect() {
-        return service.disconnect();
+    public StatusView disconnectAll() {
+        return service.disconnectAll();
     }
 
+    /** Active MySQL connection (the one queries and workflows use). */
     @GetMapping("/status")
     public StatusView status() {
         return service.status();
+    }
+
+    /** Independent health of every live connection of this session (MySQL and MongoDB). */
+    @GetMapping("/statuses")
+    public List<StatusView> statuses() {
+        return service.statuses();
     }
 
     @GetMapping("/databases")

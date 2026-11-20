@@ -9,7 +9,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "qa-utility")
 public record AppProperties(
         @DefaultValue("./.qa-database-utility") String dataDir,
-        @DefaultValue({"QA", "UAT"}) List<String> allowedEnvironments,
+        @DefaultValue({"QA", "UAT", "DEV"}) List<String> allowedEnvironments,
         @DefaultValue({"prod", "prd", "production", "live"}) List<String> blockedHostPatterns,
         @DefaultValue({"http://localhost:5173", "http://127.0.0.1:5173"}) List<String> corsOrigins,
         @DefaultValue("") String masterKey,

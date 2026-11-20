@@ -19,6 +19,10 @@ import Logo from '../components/brand/Logo';
 import LogoMark from '../components/brand/LogoMark';
 import ColorModeToggle from '../components/brand/ColorModeToggle';
 
+function envColor(env?: string): 'success' | 'warning' | 'info' {
+  return env === 'UAT' ? 'warning' : env === 'DEV' ? 'info' : 'success';
+}
+
 const WIDTH = 240;
 const COLLAPSED_WIDTH = 72;
 const SIDEBAR_KEY = 'flownexus.sidebarCollapsed';
@@ -66,7 +70,9 @@ const NAV = [
 ];
 
 export default function AppLayout() {
-  const { status, refresh } = useConnectionStatus();
+  const { status, statuses, refresh } = useConnectionStatus();
+  const mongo = statuses.find((x) => x.dbType === 'MONGODB' && x.active);
+  const liveNames = statuses.map((x) => `${x.connectionName} (${x.dbType === 'MONGODB' ? 'MongoDB' : 'MySQL'} ${x.environment})${x.connected ? '' : ' - lost'}`).join(', ');
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggle = () => setCollapsed((c) => {
     try { localStorage.setItem(SIDEBAR_KEY, c ? '0' : '1'); } catch { /* ignore */ }
@@ -89,9 +95,14 @@ export default function AppLayout() {
             <DatabaseSwitcher profileId={status.profileId} selected={status.databaseName} onChanged={() => void refresh()} />
           )}
           {status?.connected ? (
-            <Chip color={status.environment === 'UAT' ? 'warning' : 'success'} label={`${status.environment} · ${status.connectionName}`} sx={{ fontWeight: 600 }} />
+            <Chip color={envColor(status.environment)} label={`${status.environment} · ${status.connectionName}`} sx={{ fontWeight: 600 }} />
           ) : (
-            <Chip label="Not connected" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'common.white' }} />
+            <Chip label={mongo ? 'MySQL: not connected' : 'Not connected'} sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'common.white' }} />
+          )}
+          {mongo && (
+            <Tooltip title={`Live connections: ${liveNames}`}>
+              <Chip color={mongo.connected ? envColor(mongo.environment) : 'error'} label={`MongoDB · ${mongo.environment} · ${mongo.connectionName}`} sx={{ fontWeight: 600, ml: 1 }} />
+            </Tooltip>
           )}
         </Toolbar>
       </AppBar>

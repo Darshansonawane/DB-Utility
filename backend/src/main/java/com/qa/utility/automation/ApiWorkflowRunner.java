@@ -135,7 +135,8 @@ public class ApiWorkflowRunner {
         rs.scope.setBaseFolders(folders.chain(wf.folderId())); // FOLDER-scoped variables of the workflow's folder apply to its steps
         active.put(rs.runId, rs);
         persistRun(rs);
-        pool.submit(() -> execute(rs));
+        String sid = com.qa.utility.security.SessionContext.current(); // the run keeps using this browser session's connections
+        pool.submit(() -> com.qa.utility.security.SessionContext.runAs(sid, () -> execute(rs)));
         return rs.runId;
     }
 

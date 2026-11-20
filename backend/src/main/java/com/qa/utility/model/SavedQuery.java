@@ -17,8 +17,10 @@ public record SavedQuery(
         boolean enabled,
         @Size(max = 64) @jakarta.validation.constraints.Pattern(regexp = "^[A-Za-z0-9_$-]*$", message = "Database name may contain letters, digits, _ $ - only") String databaseName,
         @Valid List<QueryParameter> parameters,
-        @Valid List<QueryExtraction> extractions) {
+        @Valid List<QueryExtraction> extractions,
+        DbType engine) {
     public SavedQuery {
+        engine = engine == null ? DbType.MYSQL : engine;
         environments = environments == null ? List.of() : environments;
         databaseName = databaseName == null || databaseName.isBlank() ? null : databaseName.trim();
         parameters = parameters == null ? List.of() : parameters;
@@ -26,17 +28,23 @@ public record SavedQuery(
     }
 
     public SavedQuery(Long id, String name, String description, String category, String sql, QueryType queryType,
+                      List<String> environments, boolean enabled, String databaseName, List<QueryParameter> parameters,
+                      List<QueryExtraction> extractions) {
+        this(id, name, description, category, sql, queryType, environments, enabled, databaseName, parameters, extractions, DbType.MYSQL);
+    }
+
+    public SavedQuery(Long id, String name, String description, String category, String sql, QueryType queryType,
                       List<String> environments, boolean enabled, String databaseName, List<QueryParameter> parameters) {
-        this(id, name, description, category, sql, queryType, environments, enabled, databaseName, parameters, null);
+        this(id, name, description, category, sql, queryType, environments, enabled, databaseName, parameters, null, DbType.MYSQL);
     }
 
     /** Backward-compatible constructor: no dedicated database (runs on the active one). */
     public SavedQuery(Long id, String name, String description, String category, String sql, QueryType queryType,
                       List<String> environments, boolean enabled, List<QueryParameter> parameters) {
-        this(id, name, description, category, sql, queryType, environments, enabled, null, parameters, null);
+        this(id, name, description, category, sql, queryType, environments, enabled, null, parameters, null, DbType.MYSQL);
     }
 
     public SavedQuery withId(Long newId) {
-        return new SavedQuery(newId, name, description, category, sql, queryType, environments, enabled, databaseName, parameters, extractions);
+        return new SavedQuery(newId, name, description, category, sql, queryType, environments, enabled, databaseName, parameters, extractions, engine);
     }
 }

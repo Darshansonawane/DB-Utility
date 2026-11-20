@@ -8,8 +8,17 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
         |-- Query library        saved queries + parameter definitions (the allowlist)
         |-- Workflow engine      steps = saved queries, parameter mappings between steps
         |-- Metadata store       embedded H2 file DB (~/.qa-database-utility), schema: database/metadata-schema.sql
-        '-- Active connection    one Hikari pool to the selected QA/UAT MySQL (over your VPN)
+        |-- Connection registry  many live connections per browser session (MySQL pools + MongoDB clients), one "active" per type
+        '-- Database adapters    MySqlAdapter (Hikari/JDBC), MongoAdapter (MongoDB sync driver): open, probe, close
 ```
+
+## Connections (MySQL + MongoDB)
+
+- `ConnectionService` manages saved profiles; every connect/test/edit/delete first verifies that connection's **access password** (`AccessPasswordService`).
+- `DbAdapter` (one per type) opens real connections. `ConnectionRegistry` holds them keyed by (browser session, profile): each has its own pool/client, so one failing or being closed never affects another. The session id is an anonymous HttpOnly cookie (`SessionFilter`/`SessionContext`); background threads (workflows) re-bind the starting session.
+- Per session, one connection per type is **active**: `SessionTargetProvider` (MySQL) and `SessionMongoProvider` (MongoDB) give the SQL engine, workflows and metadata tools that connection. `Connect` makes the new connection active; `Use` switches without disconnecting anything.
+- Editing or deleting a connection closes only that connection (in every session).
+- Saved queries have an `engine`. `MYSQL`: SQL as before. `MONGODB`: `sql` holds a JSON spec run by `MongoExecutionService` (read-only; "?" strings are typed parameters). Both return the same `QueryResult`, so forms, workflows, outputs and variable extraction are unchanged.
 
 ## Why there are no per-query endpoints or components
 
@@ -25,7 +34,8 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 
 | Area | Endpoints |
 |---|---|
-| Connections | `GET/POST /api/connections`, `PUT/DELETE /api/connections/{id}`, `POST /api/connections/test`, `/{id}/test`, `/{id}/connect`, `/disconnect`, `GET /status` (health check) |
+| Connections | `GET/POST /api/connections`, `PUT/DELETE /api/connections/{id}`, `POST /api/connections/test`, `/{id}/test`, `/{id}/connect` (body `{accessPassword}`), `/{id}/disconnect`, `/{id}/activate`, `/{id}/access-password` (legacy connections only), `/disconnect` (all of this session), `GET /status` (active MySQL), `GET /statuses` (every live connection) |
+| MongoDB | `POST /api/mongo/analyze` (validate a JSON query, suggest parameters), `GET /api/mongo/collections` |
 | SQL | `POST /api/sql/analyze`, `/execute`, `/preview` |
 | Query library | `GET/POST /api/queries`, `GET/PUT/DELETE /{id}`, `/{id}/duplicate`, `/{id}/enabled`, `/{id}/preview`, `/{id}/execute`, `/categories` |
 | Metadata | `GET /api/metadata/schemas`, `/schemas/{s}/tables`, `/tables/{t}`, `/columns/{c}/values`, `/sample` |
@@ -54,4 +64,4 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 
 ## Metadata tables
 
-`connection_profile`, `saved_query`, `query_parameter`, `workflow`, `workflow_input`, `workflow_step`, `workflow_param_mapping`, `execution_history`, `workflow_run`, `workflow_step_run`, `audit_log`, `app_setting`. See [`database/metadata-schema.sql`](../database/metadata-schema.sql). The same script works on MySQL 8 if you prefer a dedicated metadata schema.
+`connection_profile` (now with `db_type`, `owner_name`, `access_password_hash`, `uri_encrypted`, `auth_database`, `tls`), `saved_query` (now with `engine`), `query_parameter`, `workflow`, `workflow_input`, `workflow_step`, `workflow_param_mapping`, `execution_history`, `workflow_run`, `workflow_step_run`, `audit_log`, `app_setting`. See [`database/metadata-schema.sql`](../database/metadata-schema.sql). The same script works on MySQL 8 if you prefer a dedicated metadata schema.

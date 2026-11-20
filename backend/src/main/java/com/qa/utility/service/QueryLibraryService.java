@@ -24,9 +24,13 @@ public class QueryLibraryService {
     private final TargetDataSourceProvider provider;
     private final AuditService audit;
     private final com.qa.utility.automation.VariableService variables;
+    private final MongoExecutionService mongo;
+    private final MongoTargetProvider mongoProvider;
 
     public QueryLibraryService(SavedQueryRepository repo, SqlExecutionService sql, TargetDataSourceProvider provider, AuditService audit,
-                               com.qa.utility.automation.VariableService variables) {
+                               com.qa.utility.automation.VariableService variables, MongoExecutionService mongo, MongoTargetProvider mongoProvider) {
+        this.mongo = mongo;
+        this.mongoProvider = mongoProvider;
         this.repo = repo;
         this.sql = sql;
         this.provider = provider;
@@ -81,7 +85,7 @@ public class QueryLibraryService {
         String base = q.name() + " (copy)";
         String name = base;
         for (int i = 2; repo.findByName(name).isPresent(); i++) name = base + " " + i;
-        return create(new SavedQuery(null, name, q.description(), q.category(), q.sql(), q.queryType(), q.environments(), q.enabled(), q.databaseName(), q.parameters(), q.extractions()));
+        return create(new SavedQuery(null, name, q.description(), q.category(), q.sql(), q.queryType(), q.environments(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine()));
     }
 
     public SavedQuery setEnabled(long id, boolean enabled) {
@@ -92,6 +96,7 @@ public class QueryLibraryService {
 
     /** Checks SQL, forces the read/write classification to match what the SQL really does and the param count to match "?". */
     SavedQuery normalise(SavedQuery q) {
+        if (q.engine() == DbType.MONGODB) return normaliseMongo(q);
         ParsedSql p = sql.validate(q.sql());
         QueryType actual = p.type().isWrite() ? QueryType.WRITE : QueryType.READ;
         if (q.queryType() != null && q.queryType() != actual) {
@@ -106,7 +111,24 @@ public class QueryLibraryService {
             if (!names.add(qp.name().toLowerCase())) throw ApiException.badRequest("Duplicate parameter name '" + qp.name() + "'");
         }
         return new SavedQuery(q.id(), q.name().trim(), q.description(), q.category(), p.sql().equals(q.sql().trim()) ? q.sql().trim() : q.sql().trim(),
-                actual, q.environments().stream().map(e -> e.trim().toUpperCase()).filter(e -> !e.isEmpty()).toList(), q.enabled(), q.databaseName(), q.parameters(), q.extractions());
+                actual, q.environments().stream().map(e -> e.trim().toUpperCase()).filter(e -> !e.isEmpty()).toList(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine());
+    }
+
+    /** MongoDB queries are JSON specs and always read-only; "?" strings inside the JSON are the parameters. */
+    private SavedQuery normaliseMongo(SavedQuery q) {
+        MongoExecutionService.Spec spec = mongo.validate(q.sql());
+        if (q.queryType() == QueryType.WRITE) throw ApiException.badRequest("MongoDB queries are read-only");
+        if (spec.placeholders() != q.parameters().size()) {
+            throw ApiException.badRequest("The query has " + spec.placeholders() + " \"?\" placeholder(s) but " + q.parameters().size()
+                    + " parameter definition(s). Define exactly one parameter per \"?\", in document order.");
+        }
+        Set<String> names = new HashSet<>();
+        for (QueryParameter qp : q.parameters()) {
+            if (!names.add(qp.name().toLowerCase())) throw ApiException.badRequest("Duplicate parameter name '" + qp.name() + "'");
+        }
+        return new SavedQuery(q.id(), q.name().trim(), q.description(), q.category(), q.sql().trim(), QueryType.READ,
+                q.environments().stream().map(e -> e.trim().toUpperCase()).filter(e -> !e.isEmpty()).toList(), q.enabled(), q.databaseName(),
+                q.parameters(), q.extractions(), DbType.MONGODB);
     }
 
     public SqlAnalysis analyze(String text) {
@@ -243,10 +265,20 @@ public class QueryLibraryService {
         return out;
     }
 
+    /** Runs a READ query on the engine it was written for (MySQL or MongoDB). Used by saved-query runs and workflow steps. */
+    public QueryResult run(SavedQuery q, List<BoundParam> bound, String token, SqlExecutionService.ExecContext ctx) {
+        return q.engine() == DbType.MONGODB ? mongo.execute(q.sql(), bound, ctx) : sql.execute(q.sql(), bound, token, ctx);
+    }
+
+    /** Active connection for the given engine in this session. */
+    public Optional<ConnectionProfile> activeProfile(DbType engine) {
+        return engine == DbType.MONGODB ? mongoProvider.activeProfile() : provider.activeProfile();
+    }
+
     public void checkRunnable(SavedQuery q) {
         if (!q.enabled()) throw ApiException.badRequest("Query '" + q.name() + "' is disabled");
         if (!q.environments().isEmpty()) {
-            String env = provider.activeProfile().map(ConnectionProfile::environment)
+            String env = activeProfile(q.engine()).map(ConnectionProfile::environment)
                     .orElseThrow(() -> ApiException.conflict("Not connected"));
             if (q.environments().stream().noneMatch(env::equalsIgnoreCase)) {
                 throw ApiException.forbidden("Query '" + q.name() + "' is restricted to " + q.environments() + " but the active environment is " + env);
@@ -257,7 +289,7 @@ public class QueryLibraryService {
     public QueryResult execute(long id, Map<String, String> values, String token) {
         SavedQuery q = get(id);
         checkRunnable(q);
-        QueryResult res = sql.execute(q.sql(), bind(q, values), token, SqlExecutionService.ExecContext.saved(id, q.name(), q.databaseName()));
+        QueryResult res = run(q, bind(q, values), token, SqlExecutionService.ExecContext.saved(id, q.name(), q.databaseName()));
         if (q.queryType() == QueryType.READ && !q.extractions().isEmpty()) {
             res = res.withExtracted(applyExtractions(q, res, null).values());
         }
@@ -267,6 +299,7 @@ public class QueryLibraryService {
     public WritePreview preview(long id, Map<String, String> values) {
         SavedQuery q = get(id);
         checkRunnable(q);
+        if (q.engine() == DbType.MONGODB) throw ApiException.badRequest("MongoDB queries are read-only and need no write preview");
         return sql.preview(q.sql(), bind(q, values), SqlExecutionService.ExecContext.saved(id, q.name(), q.databaseName()));
     }
 }

@@ -7,15 +7,15 @@ import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = { getWorker: () => new editorWorker() };
 loader.config({ monaco });
 
-interface Props { value: string; onChange: (v: string) => void; height?: number | string; readOnly?: boolean }
+interface Props { value: string; onChange: (v: string) => void; height?: number | string; readOnly?: boolean; language?: 'sql' | 'json' }
 
-export default function SqlEditorBox({ value, onChange, height = 260, readOnly }: Props) {
+export default function SqlEditorBox({ value, onChange, height = 260, readOnly, language = 'sql' }: Props) {
   const dark = useTheme().palette.mode === 'dark';
   return (
     <div style={{ border: `1px solid ${dark ? '#2b3f66' : '#cfd6e4'}`, borderRadius: 6, overflow: 'hidden' }}>
       <Editor
         height={height}
-        language="sql"
+        language={language}
         theme={dark ? 'vs-dark' : 'light'}
         value={value}
         onChange={(v) => onChange(v ?? '')}
