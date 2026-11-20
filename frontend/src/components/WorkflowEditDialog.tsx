@@ -11,6 +11,7 @@ import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
+import StepTestRun from './workflow/StepTestRun';
 import { folderPaths } from './folders/folderUtils';
 import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
@@ -231,6 +232,8 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                     </Stack>
                   );
                 })}
+                {(s.stepType ?? 'QUERY') === 'QUERY' && s.queryId > 0 && queryOf(s.queryId) && <StepTestRun key={`q${s.queryId}`} step={s} inputs={w.inputs} query={queryOf(s.queryId)} />}
+                {s.stepType === 'API_REQUEST' && s.apiRequestId && apiRequests.find((r) => r.id === s.apiRequestId) && <StepTestRun key={`a${s.apiRequestId}`} step={s} inputs={w.inputs} apiRequest={apiRequests.find((r) => r.id === s.apiRequestId)} />}
               </Stack>
             </Paper>
           ))}

@@ -69,3 +69,17 @@ describe('Runtime parameter mode', () => {
     expect(screen.getByTestId('out').textContent).toContain('"defaultValue":null');
   });
 });
+
+import { knownValues } from '../components/workflow/StepTestRun';
+describe('workflow step test values', () => {
+  it('knows constants and the defaults of workflow inputs, nothing else', () => {
+    const step = { mappings: [
+      { paramName: 'a', sourceType: 'CONSTANT', constantValue: '5' },
+      { paramName: 'b', sourceType: 'INPUT', sourceRef: 'cust' },
+      { paramName: 'c', sourceType: 'INPUT', sourceRef: 'noDefault' },
+      { paramName: 'd', sourceType: 'STEP_OUTPUT', sourceRef: '1', sourceField: 'id' },
+    ] } as never;
+    const inputs = [{ name: 'cust', defaultValue: 'C1' }, { name: 'noDefault' }] as never;
+    expect(knownValues(step, inputs)).toEqual({ a: '5', b: 'C1' });
+  });
+});
