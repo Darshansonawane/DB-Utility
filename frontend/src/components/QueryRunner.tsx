@@ -11,11 +11,13 @@ import ResultTable from './ResultTable';
 import WritePreviewDialog from './WritePreviewDialog';
 import ExtractPicker from './apiauto/ExtractPicker';
 import { useFolders } from './folders/FolderTree';
+import { QuerySuccessBanner } from './motion/DbSuccess';
 
 /** Runs any query from the Queries Manager: generated form -> (preview + confirmation for writes) -> result. */
 export default function QueryRunner({ query }: { query: SavedQuery }) {
   const [values, setValues] = useState<Record<string, string>>(initialValues(query.parameters));
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [runCount, setRunCount] = useState(0);
   const [preview, setPreview] = useState<WritePreview | null>(null);
   const { loading, error, setError, run } = useAsync();
   const write = query.queryType === 'WRITE';
@@ -51,7 +53,7 @@ export default function QueryRunner({ query }: { query: SavedQuery }) {
       if (p) setPreview(p);
     } else {
       const r = await run(() => api.executeQuery(query.id!, values));
-      if (r) setResult(r);
+      if (r) { setResult(r); setRunCount((n) => n + 1); }
     }
   };
 
@@ -59,7 +61,7 @@ export default function QueryRunner({ query }: { query: SavedQuery }) {
     const token = preview?.confirmationToken ?? undefined;
     const r = await run(() => api.executeQuery(query.id!, values, token));
     setPreview(null);
-    if (r) setResult(r);
+    if (r) { setResult(r); setRunCount((n) => n + 1); }
   };
 
   return (
@@ -99,6 +101,7 @@ export default function QueryRunner({ query }: { query: SavedQuery }) {
       {error && <Alert severity="error">{error}</Alert>}
       {result && (
         <Box>
+          <Box sx={{ mb: 1 }}><QuerySuccessBanner rowCount={result.rowCount} affectedRows={result.affectedRows} durationMs={result.durationMs} runKey={runCount} /></Box>
           <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
             <Chip size="small" label={`${ms(result.durationMs)}`} />
             {result.affectedRows !== null && result.affectedRows !== undefined

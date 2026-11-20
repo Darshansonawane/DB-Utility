@@ -21,9 +21,42 @@
 .hover-lift { transition: transform 180ms ease, box-shadow 180ms ease; }
 .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(10, 31, 68, 0.14); }
 
+/* ---- database / data-flow motion ------------------------------------------------------------------------------------ */
+@keyframes dbu-packet { 0% { transform: translateX(-4px); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateX(20px); opacity: 1; } 100% { transform: translateX(26px); opacity: 0; } }
+@keyframes dbu-cyl { 0% { transform: scale(0.9); opacity: 0.3; } 50% { transform: scale(1.04); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes dbu-check-pop { 0%, 55% { transform: scale(0); opacity: 0; } 80% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes dbu-cascade { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@keyframes dbu-run-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(2, 136, 209, 0.55); } 50% { box-shadow: 0 0 0 6px rgba(2, 136, 209, 0); } }
+@keyframes dbu-flow { 0% { top: -4px; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { top: calc(100% - 4px); opacity: 0; } }
+@keyframes dbu-dash { to { background-position: 0 12px; } }
+@keyframes dbu-banner-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+.db-banner { animation: dbu-banner-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.db-success .db-cyl { transform-origin: 28px 24px; animation: dbu-cyl 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.db-success .db-packet { opacity: 0; animation: dbu-packet 900ms ease-in-out both; }
+.db-success .p2 { animation-delay: 140ms; } .db-success .p3 { animation-delay: 280ms; }
+.db-success .db-check { transform-origin: center; transform-box: fill-box; animation: dbu-check-pop 900ms cubic-bezier(0.2, 1.2, 0.4, 1) both; }
+.row-cascade { animation: dbu-cascade 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 28ms); }
+.chip-running { animation: dbu-run-pulse 1.3s ease-in-out infinite; }
+
+.flow-connector { position: relative; height: 18px; width: 2px; margin: 0 0 0 28px; }
+.flow-connector .flow-line { position: absolute; inset: 0; border-radius: 1px; background: rgba(128, 128, 128, 0.35); }
+.flow-connector .flow-dot { position: absolute; left: -2px; width: 6px; height: 6px; border-radius: 50%; top: -4px; opacity: 0; background: #2e7d32; }
+.flow-running .flow-line { background: repeating-linear-gradient(to bottom, #0288d1 0 4px, transparent 4px 8px); background-size: 2px 12px; animation: dbu-dash 0.6s linear infinite; }
+.flow-running .flow-dot { background: #0288d1; animation: dbu-flow 0.9s ease-in-out infinite; }
+.flow-running .d2 { animation-delay: 0.45s; }
+.flow-done .flow-line { background: #2e7d32; }
+.flow-done .flow-dot { animation: dbu-flow 0.8s ease-in-out 1; }
+.flow-done .d2 { animation-delay: 0.25s; }
+.flow-failed .flow-line { background: repeating-linear-gradient(to bottom, #d32f2f 0 3px, transparent 3px 6px); background-size: 2px 6px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
   .hover-lift:hover { transform: none; }
   .check-draw path { stroke-dashoffset: 0; }
+  .db-success .db-packet { opacity: 0; }
+  .flow-running .flow-line { animation: none; }
+  .flow-dot { display: none; }
+  .chip-running { animation: none; }
 }

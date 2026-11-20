@@ -23,7 +23,7 @@ export default function ResultTable({ columns, rows, truncated, maxHeight = 380,
               <TableRow><TableCell colSpan={columns.length}><Typography variant="body2" color="text.secondary">{emptyText}</Typography></TableCell></TableRow>
             )}
             {rows.map((r, ri) => (
-              <TableRow key={ri} hover>
+              <TableRow key={ri} hover className={ri < 14 ? 'row-cascade' : undefined} style={ri < 14 ? ({ '--i': ri } as React.CSSProperties) : undefined}>
                 {r.map((v, ci) => (
                   <TableCell key={ci} sx={{ whiteSpace: 'nowrap', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5, color: v === null ? 'text.disabled' : 'text.primary', fontStyle: v === null ? 'italic' : 'normal' }}>
                     {cell(v)}

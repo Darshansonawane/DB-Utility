@@ -14,6 +14,7 @@ import { ms } from '../utils/format';
 import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
 import StatusChip from './StatusChip';
+import FlowConnector, { flowStateOf } from './motion/FlowConnector';
 
 type Overrides = Record<number, Record<string, string>>;
 
@@ -147,12 +148,14 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
         </Stack>
       )}
 
-      {workflow.steps.map((s) => {
+      {workflow.steps.map((s, idx) => {
         const sv: StepRunView = run?.steps.find((x) => x.order === s.order) ?? {
           order: s.order, name: s.name, status: 'PENDING', attempts: 0, params: {}, paramSources: {}, outputs: {},
         } as StepRunView;
         return (
-          <Accordion key={s.order} expanded={!!expanded[s.order]} onChange={(_, v) => setExpanded((e) => ({ ...e, [s.order]: v }))} disableGutters variant="outlined">
+          <Box key={s.order}>
+          {idx > 0 && <FlowConnector state={flowStateOf(run?.steps.find((x) => x.order === workflow.steps[idx - 1].order)?.status)} />}
+          <Accordion expanded={!!expanded[s.order]} onChange={(_, v) => setExpanded((e) => ({ ...e, [s.order]: v }))} disableGutters variant="outlined">
             <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-label={`step ${s.order}`}>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
                 <Typography fontWeight={700} sx={{ minWidth: 70 }}>Step {s.order}</Typography>
@@ -180,6 +183,7 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
               </Stack>
             </AccordionDetails>
           </Accordion>
+          </Box>
         );
       })}
     </Stack>
