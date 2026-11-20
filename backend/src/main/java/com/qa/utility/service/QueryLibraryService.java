@@ -214,11 +214,16 @@ public class QueryLibraryService {
 
     /** Saves the configured columns of the first result row into variables (run scope first, shared store per the scope's rules). */
     public ExtractionOutcome applyExtractions(SavedQuery q, QueryResult res, com.qa.utility.automation.VarScope scope) {
+        return applyExtractions("sql:" + q.name(), q.extractions(), res, scope);
+    }
+
+    /** The same, for an explicit list of rules (a workflow step's own "save to variable" settings). */
+    public ExtractionOutcome applyExtractions(String source, List<QueryExtraction> rules, QueryResult res, com.qa.utility.automation.VarScope scope) {
         List<com.qa.utility.automation.ApiDtos.ExtractedValue> values = new ArrayList<>();
         List<String> problems = new ArrayList<>();
-        if (q.extractions().isEmpty()) return new ExtractionOutcome(values, problems);
+        if (rules.isEmpty()) return new ExtractionOutcome(values, problems);
         Map<String, Object> first = res.firstRow();
-        for (QueryExtraction x : q.extractions()) {
+        for (QueryExtraction x : rules) {
             if (res.rowCount() == 0) {
                 values.add(new com.qa.utility.automation.ApiDtos.ExtractedValue(x.variable(), null, x.secret(), false));
                 problems.add("No rows returned, so '" + x.variable() + "' could not be extracted");
@@ -236,7 +241,7 @@ public class QueryLibraryService {
                 continue;
             }
             String text = String.valueOf(v);
-            variables.put(x.variable().trim(), text, x.secret(), "sql:" + q.name(), scope, x.folderId());
+            variables.put(x.variable().trim(), text, x.secret(), source, scope, x.folderId());
             values.add(new com.qa.utility.automation.ApiDtos.ExtractedValue(x.variable(), x.secret() ? com.qa.utility.automation.VariableService.MASK : text, x.secret(), true));
         }
         return new ExtractionOutcome(values, problems);

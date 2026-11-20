@@ -1,6 +1,7 @@
 package com.qa.utility.repository;
 
 import com.qa.utility.model.ParamType;
+import com.qa.utility.model.QueryExtraction;
 import com.qa.utility.model.Workflow;
 import com.qa.utility.model.Workflow.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -56,7 +57,7 @@ public class WorkflowRepository {
                                         r.getInt("retry_count"), r.getInt("retry_delay_ms"), r.getBoolean("stop_on_failure"),
                                         parseOutputs(r.getString("output_fields")), maps, r.getString("step_type"), apiRequestId,
                                         r.getString("api_name"), parseOptions(r.getString("api_options_json")),
-                                        subId, r.getString("sub_name"));
+                                        subId, r.getString("sub_name"), readSaves(r.getString("save_variables_json")));
                             }, id);
                     String lastStatus = null;
                     java.time.Instant lastRunAt = null;
@@ -130,7 +131,7 @@ public class WorkflowRepository {
             KeyHolder kh = new GeneratedKeyHolder();
             jdbc.update(con -> {
                 PreparedStatement ps = con.prepareStatement(
-                        "INSERT INTO workflow_step (workflow_id, step_order, name, description, query_id, depends_on, retry_count, retry_delay_ms, stop_on_failure, output_fields, step_type, api_request_id, api_options_json, sub_workflow_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO workflow_step (workflow_id, step_order, name, description, query_id, depends_on, retry_count, retry_delay_ms, stop_on_failure, output_fields, step_type, api_request_id, api_options_json, sub_workflow_id, save_variables_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         Statement.RETURN_GENERATED_KEYS);
                 ps.setLong(1, wid);
                 ps.setInt(2, s.order());
@@ -149,6 +150,7 @@ public class WorkflowRepository {
                 ps.setString(13, options(s));
                 if (s.isWorkflow() && s.subWorkflowId() != null) ps.setLong(14, s.subWorkflowId());
                 else ps.setNull(14, java.sql.Types.BIGINT);
+                ps.setString(15, writeSaves(s.saveVariables()));
                 return ps;
             }, kh);
             long stepId = ((Number) kh.getKeys().get(kh.getKeys().containsKey("id") ? "id" : kh.getKeys().keySet().iterator().next())).longValue();
@@ -180,6 +182,25 @@ public class WorkflowRepository {
     private static List<Integer> parseInts(String s) {
         if (s == null || s.isBlank()) return List.of();
         return Arrays.stream(s.split(",")).map(String::trim).filter(x -> !x.isEmpty()).map(Integer::valueOf).toList();
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static String writeSaves(List<QueryExtraction> l) {
+        try {
+            return l == null || l.isEmpty() ? null : JSON.writeValueAsString(l);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static List<QueryExtraction> readSaves(String j) {
+        if (j == null || j.isBlank()) return List.of();
+        try {
+            return JSON.readValue(j, new com.fasterxml.jackson.core.type.TypeReference<List<QueryExtraction>>() { });
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private static List<OutputField> parseOutputs(String s) {

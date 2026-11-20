@@ -15,6 +15,8 @@ import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import StepTestRun from './workflow/StepTestRun';
+import StepVariableSaves from './workflow/StepVariableSaves';
+import VariableInput from './apiauto/VariableInput';
 import { insertStep, reorderSteps } from './workflow/reorder';
 import InsertStepButton, { type StepKind } from './workflow/InsertStepButton';
 import { folderPaths } from './folders/folderUtils';
@@ -145,7 +147,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
     // a step waits for every step whose output it uses (plus any dependency it already had), so there is no separate field for it
     const clean: Workflow = { ...w, steps: w.steps.map((st) => {
       const used = st.mappings.filter((m) => m.sourceType === 'STEP_OUTPUT').map((m) => parseInt(m.sourceRef ?? '', 10)).filter((n) => !Number.isNaN(n) && n !== st.order);
-      return { ...st, dependsOn: Array.from(new Set([...st.dependsOn, ...used])).sort((a, b) => a - b), mappings: st.mappings.filter((m) => m.sourceType !== 'INPUT' || (m.sourceRef ?? '') !== '') };
+      return { ...st, saveVariables: (st.saveVariables ?? []).filter((v) => v.variable.trim() && v.column.trim()), dependsOn: Array.from(new Set([...st.dependsOn, ...used])).sort((a, b) => a - b), mappings: st.mappings.filter((m) => m.sourceType !== 'INPUT' || (m.sourceRef ?? '') !== '') };
     }) };
     const saved = await run(() => (clean.id ? api.updateWorkflow(clean.id, clean) : api.createWorkflow(clean)));
     if (saved) onSaved();
@@ -243,7 +245,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                         <MenuItem value="RUNTIME">Runtime</MenuItem>
                         <MenuItem value="INPUT" disabled={w.inputs.length === 0}>Workflow input{w.inputs.length === 0 ? ' (add an input first)' : ''}</MenuItem>
                         <MenuItem value="STEP_OUTPUT">Earlier step output</MenuItem>
-                        <MenuItem value="CONSTANT">Constant</MenuItem>
+                        <MenuItem value="CONSTANT">Value or variable</MenuItem>
                       </TextField>
                       {source === 'RUNTIME' && (
                         <Typography variant="caption" color="text.secondary">Asked when running</Typography>
@@ -261,10 +263,14 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                           <TextField size="small" label="Output field" sx={{ minWidth: 220 }} placeholder="id  /  data.items.0.id" value={m.sourceField ?? ''} onChange={(e) => patchMap(i, p.name, { sourceField: e.target.value })} />
                         </>
                       )}
-                      {m?.sourceType === 'CONSTANT' && <TextField size="small" label="Value" value={m.constantValue ?? ''} onChange={(e) => patchMap(i, p.name, { constantValue: e.target.value })} />}
+                      {m?.sourceType === 'CONSTANT' && <Box sx={{ minWidth: 300, flex: 1 }}><VariableInput label="Value or {{variable}}" value={m.constantValue ?? ''} onChange={(v) => patchMap(i, p.name, { constantValue: v })}
+                        extraNames={w.steps.filter((x) => x.order < s.order).flatMap((x) => (x.saveVariables ?? []).map((v) => v.variable.trim()))} /></Box>}
                     </Stack>
                   );
                 })}
+                {(s.stepType ?? 'QUERY') === 'QUERY' && (
+                  <StepVariableSaves value={s.saveVariables ?? []} onChange={(saveVariables) => updStep(i, { saveVariables })} columns={(stepResults[s.order]?.columns ?? []).map((c) => c.name)} />
+                )}
                 {(s.stepType ?? 'QUERY') === 'QUERY' && s.queryId > 0 && queryOf(s.queryId) && <StepTestRun key={`q${s.queryId}`} step={s} steps={w.steps} inputs={w.inputs} results={stepResults} onResult={(o, r) => setStepResults((c) => ({ ...c, [o]: r }))} query={queryOf(s.queryId)} />}
                 {s.stepType === 'API_REQUEST' && s.apiRequestId && apiRequests.find((r) => r.id === s.apiRequestId) && <StepTestRun key={`a${s.apiRequestId}`} step={s} steps={w.steps} inputs={w.inputs} results={stepResults} onResult={(o, r) => setStepResults((c) => ({ ...c, [o]: r }))} apiRequest={apiRequests.find((r) => r.id === s.apiRequestId)} />}
               </Stack>

@@ -102,6 +102,19 @@ class RuntimeInputsTest extends AbstractDbTest {
 
     // ---------------------------------------------------------------- resolution priority
     @Test
+    void aStepSavesAColumnIntoAVariableThatALaterStepUses() {
+        SavedQuery rows = rows("rows"), echo = echo("SELECT CAST(? AS VARCHAR(50)) AS v", true, null);
+        String var = "savedHr" + UUID.randomUUID().toString().substring(0, 8);
+        WorkflowStep first = new WorkflowStep(null, 1, "rows", null, rows.id(), null, List.of(), 0, 0, false, List.of(), List.of(),
+                "QUERY", null, null, null, null, null, List.of(new QueryExtraction(var, "hr_id", false, null)));
+        long id = workflow(List.of(), first, step(2, echo, List.of(1), List.of(), constant("v", "{{" + var + "}}")));
+        assertEquals(1, repo.findById(id).orElseThrow().steps().get(0).saveVariables().size(), "the step's variable save is stored");
+        RunView r = executor.runNow(id, Map.of(), null, null);
+        assertEquals("SUCCESS", at(r, 1).status());
+        assertEquals("HR-A", cell(at(r, 2)), "the later step read the value saved by step 1 from the first result row");
+    }
+
+    @Test
     void runtimeOverrideBeatsAutomaticBeatsDefaultBeatsEmpty() {
         SavedQuery rows = rows("rows"), withDefault = echo("SELECT CAST(? AS VARCHAR(50)) AS v", false, "DEFAULT-V"), optional = echo("SELECT CAST(? AS VARCHAR(50)) AS v", false, null);
         long id = workflow(List.of(),

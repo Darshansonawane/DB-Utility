@@ -95,6 +95,8 @@ export interface WorkflowStep {
   outputFields: OutputField[]; mappings: ParamMapping[];
   stepType?: 'QUERY' | 'API_REQUEST' | 'WORKFLOW'; apiRequestId?: number | null; apiRequestName?: string; apiOptions?: ApiStepOptions | null;
   subWorkflowId?: number | null; subWorkflowName?: string;
+  /** columns of the first result row saved as variables by this step */
+  saveVariables?: QueryExtraction[];
 }
 export interface Workflow {
   id?: number; name: string; description?: string; inputs: WorkflowInput[]; steps: WorkflowStep[]; folderId?: number | null;

@@ -88,7 +88,8 @@ public record Workflow(
             String apiRequestName,
             @Valid com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions,
             Long subWorkflowId,
-            String subWorkflowName) {
+            String subWorkflowName,
+            @Valid List<QueryExtraction> saveVariables) {
         public static final String QUERY = "QUERY";
         public static final String API_REQUEST = "API_REQUEST";
         public static final String WORKFLOW = "WORKFLOW";
@@ -98,6 +99,15 @@ public record Workflow(
                             String stepType, Long apiRequestId, String apiRequestName, com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions) {
             this(id, order, name, description, queryId, queryName, dependsOn, retryCount, retryDelayMs, stopOnFailure, outputFields, mappings,
                     stepType, apiRequestId, apiRequestName, apiOptions, null, null);
+        }
+
+        /** Constructor without per-step variable saves (existing callers). */
+        public WorkflowStep(Long id, int order, String name, String description, long queryId, String queryName, List<Integer> dependsOn,
+                            int retryCount, int retryDelayMs, boolean stopOnFailure, List<OutputField> outputFields, List<ParamMapping> mappings,
+                            String stepType, Long apiRequestId, String apiRequestName, com.qa.utility.automation.ApiDtos.ApiStepOptions apiOptions,
+                            Long subWorkflowId, String subWorkflowName) {
+            this(id, order, name, description, queryId, queryName, dependsOn, retryCount, retryDelayMs, stopOnFailure, outputFields, mappings,
+                    stepType, apiRequestId, apiRequestName, apiOptions, subWorkflowId, subWorkflowName, null);
         }
 
         public boolean isWorkflow() {
@@ -120,6 +130,7 @@ public record Workflow(
             dependsOn = dependsOn == null ? List.of() : dependsOn;
             outputFields = outputFields == null ? List.of() : outputFields;
             mappings = mappings == null ? List.of() : mappings;
+            saveVariables = saveVariables == null ? List.of() : saveVariables;
         }
     }
 }

@@ -390,6 +390,13 @@ public class WorkflowExecutor {
         ctx.docs.put(st.order(), resultDoc(res)); // the full response is always kept: later steps can reach any row or column
         QueryLibraryService.ExtractionOutcome extractedVars = library.applyExtractions(q, res, ctx.scope);
         if (!extractedVars.values().isEmpty()) res = res.withExtracted(extractedVars.values());
+        // variables this workflow step saves itself, in addition to the ones the query always saves
+        QueryLibraryService.ExtractionOutcome stepVars = library.applyExtractions("workflow step: " + st.name(), st.saveVariables(), res, ctx.scope);
+        if (!stepVars.values().isEmpty()) {
+            java.util.List<com.qa.utility.automation.ApiDtos.ExtractedValue> all = new ArrayList<>(res.extracted() == null ? java.util.List.of() : res.extracted());
+            all.addAll(stepVars.values());
+            res = res.withExtracted(all);
+        }
         Map<String, Object> outputs = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
         if (res.rowCount() > 0) {
