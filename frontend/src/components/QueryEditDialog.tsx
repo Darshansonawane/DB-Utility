@@ -69,21 +69,18 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
             onChange={(_, v) => setQ({ ...q, databaseName: v || null })}
             onInputChange={(_, v, reason) => { if (reason === 'input') setQ({ ...q, databaseName: v || null }); }}
             renderInput={(params) => <TextField {...params} label="Run in database (optional)"
-              helperText={mongo ? 'Leave empty to use the database of the active MongoDB connection.' : 'Leave empty to use the database selected in the top bar. Set it so this query always runs in its own database.'} />} />
+              helperText={mongo ? 'Empty = active MongoDB database' : 'Empty = database selected in the top bar'} />} />
           <SqlEditorBox value={q.sql} onChange={(v) => setQ({ ...q, sql: v })} height={200} language={mongo ? 'json' : 'sql'} />
           <Stack direction="row" spacing={2} alignItems="center">
             <Button variant="outlined" onClick={detect} disabled={loading || !q.sql.trim()}>Detect parameters from "?"</Button>
             {mongo && <Button onClick={() => setQ({ ...q, sql: MONGO_EXAMPLE })} disabled={loading}>Insert example</Button>}
-            {q.queryType && <Typography variant="body2">Classified as <b>{q.queryType}</b> (derived from the SQL)</Typography>}
+            {q.queryType && <Typography variant="body2"><b>{q.queryType}</b></Typography>}
           </Stack>
-          <Typography variant="subtitle2">Parameters (one per "?", in order): these generate the input form</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: '-8px !important' }}>
-            Detected parameters are supplied at <b>Runtime</b>: you are asked for the value when the query or workflow runs, so nothing has to be stored here. Switch one to <b>Default value</b> only when it should have a fallback or test value.
-          </Typography>
+          <Typography variant="subtitle2">Parameters</Typography>
           <ParamDefinitionEditor parameters={q.parameters} onChange={(parameters) => setQ({ ...q, parameters })} />
           {q.queryType !== 'WRITE' && <QueryExtractionEditor value={q.extractions ?? []} folders={varFolders.folders} onChange={(extractions) => setQ({ ...q, extractions })} />}
           <Stack direction="row" spacing={2} alignItems="center">
-            <Typography variant="body2">Allowed environments (none = all approved):</Typography>
+            <Typography variant="body2">Environments (none = all):</Typography>
             {ENVS.map((e) => (
               <FormControlLabel key={e.value} label={e.label} control={<Checkbox checked={q.environments.map(canonicalEnv).includes(e.value)}
                 onChange={(ev) => setQ({ ...q, environments: ev.target.checked ? [...q.environments.map(canonicalEnv), e.value] : q.environments.map(canonicalEnv).filter((x) => x !== e.value) })} />} />

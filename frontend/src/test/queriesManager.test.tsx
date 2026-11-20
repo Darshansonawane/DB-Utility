@@ -60,9 +60,9 @@ describe('Runtime parameter mode', () => {
     const [p, setP] = useState(initial);
     return <><ParamDefinitionEditor parameters={p} onChange={setP} /><output data-testid="out">{JSON.stringify(p)}</output></>;
   };
-  it('infers Runtime from a blank default and clears the default when switched to Runtime', async () => {
+  it('infers Runtime from a blank variable and clears the variable when switched to Runtime', async () => {
     const base: QueryParameter = { name: 'id', label: 'Id', type: 'STRING', required: true, defaultValue: 'abc' } as QueryParameter;
-    expect(paramMode(base)).toBe('DEFAULT');
+    expect(paramMode(base)).toBe('AUTOMATIC');
     expect(paramMode({ ...base, defaultValue: null })).toBe('RUNTIME');
     render(<Host initial={[base]} />);
     await userEvent.click(screen.getByLabelText('parameter 1 runtime'));

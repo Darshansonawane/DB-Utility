@@ -1,24 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Checkbox, Chip, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import { Box, Checkbox, FormControlLabel, IconButton, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VariableInput from './apiauto/VariableInput';
 import type { ParamType, QueryParameter } from '../types';
 
 const TYPES: ParamType[] = ['STRING', 'INTEGER', 'DECIMAL', 'DATE', 'DATETIME', 'BOOLEAN'];
 
-export type ParamMode = 'RUNTIME' | 'DEFAULT';
+export type ParamMode = 'RUNTIME' | 'AUTOMATIC';
 
-/** A parameter with no stored value is supplied at runtime; one with a default (or a {{variable}}) uses it when nothing else is given. */
+/**
+ * Runtime: the value is typed in by hand when the query or workflow runs. Automatic: the value comes from a variable ({{name}}),
+ * which an API response, another query or a workflow step fills in. The variable reference is stored in the parameter's
+ * defaultValue field, which the engine resolves at run time, so no stored literal value is involved.
+ */
 export function paramMode(p: QueryParameter): ParamMode {
-  return (p.defaultValue ?? '').trim() ? 'DEFAULT' : 'RUNTIME';
+  return (p.defaultValue ?? '').trim() ? 'AUTOMATIC' : 'RUNTIME';
 }
 
 interface Props { parameters: QueryParameter[]; onChange: (p: QueryParameter[]) => void }
 
 /**
- * Edits the i-th "?" placeholder definitions: these drive the generated forms. Every parameter is either supplied at
- * <b>Runtime</b> (asked for when the query or workflow runs: nothing is stored) or has a <b>Default value</b> that is used
- * when no value is provided.
+ * Edits the i-th "?" placeholder definitions: these drive the generated forms. Every parameter is either supplied
+ * manually at <b>Runtime</b> or is <b>Automatic</b>: taken from a variable that an API or another query fills in.
  */
 export default function ParamDefinitionEditor({ parameters, onChange }: Props) {
   const [forced, setForced] = useState<Record<number, ParamMode>>({});
@@ -51,19 +54,17 @@ export default function ParamDefinitionEditor({ parameters, onChange }: Props) {
             <TextField size="small" select label="Type" value={p.type} onChange={(e) => upd(i, { type: e.target.value as ParamType })} sx={{ minWidth: 130 }}>
               {TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
             </TextField>
-            <Tooltip title="Runtime: the value is asked for when the query or workflow runs. Default value: stored here and used when nothing else is given.">
+            <Tooltip title="Runtime: entered by hand. Automatic: from a variable.">
               <ToggleButtonGroup size="small" exclusive value={mode} aria-label={`value source of parameter ${i + 1}`} onChange={(_, v: ParamMode | null) => v && setMode(i, v)} sx={{ height: 40 }}>
                 <ToggleButton value="RUNTIME" aria-label={`parameter ${i + 1} runtime`}>Runtime</ToggleButton>
-                <ToggleButton value="DEFAULT" aria-label={`parameter ${i + 1} default value`}>Default value</ToggleButton>
+                <ToggleButton value="AUTOMATIC" aria-label={`parameter ${i + 1} automatic`}>Automatic</ToggleButton>
               </ToggleButtonGroup>
             </Tooltip>
             <Box sx={{ minWidth: 260, flex: 1 }}>
-              {mode === 'DEFAULT'
-                ? <VariableInput label="Default / test value or {{variable}}" value={p.defaultValue ?? ''} placeholder="value or {{variable}}" onChange={(v) => upd(i, { defaultValue: v })} />
-                : <Stack direction="row" spacing={1} alignItems="center" sx={{ height: 40 }}>
-                  <Chip size="small" color="primary" variant="outlined" label="Runtime" />
-                  <Typography variant="caption" color="text.secondary">Supplied when the query or workflow runs</Typography>
-                </Stack>}
+              {mode === 'AUTOMATIC'
+                ? <VariableInput label="Variable" value={p.defaultValue ?? ''} placeholder="{{variable}}" onChange={(v) => upd(i, { defaultValue: v })}
+                  helperText={(p.defaultValue ?? '').trim() && !(p.defaultValue ?? '').includes('{{') ? 'Use {{name}}' : undefined} />
+                : null}
             </Box>
             <FormControlLabel control={<Checkbox checked={p.required} onChange={(e) => upd(i, { required: e.target.checked })} />} label="Required" sx={{ mt: { md: 0.25 } }} />
             <IconButton aria-label="remove parameter" onClick={() => onChange(parameters.filter((_, k) => k !== i))}><DeleteIcon fontSize="small" /></IconButton>
