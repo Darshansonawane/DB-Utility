@@ -13,7 +13,7 @@ import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import StepTestRun from './workflow/StepTestRun';
 import { folderPaths } from './folders/folderUtils';
-import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
+import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, QueryResult, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
 const EMPTY: Workflow = { name: '', description: '', inputs: [], steps: [] };
 const TYPES: ParamType[] = ['STRING', 'INTEGER', 'DECIMAL', 'DATE', 'DATETIME', 'BOOLEAN'];
@@ -37,12 +37,15 @@ function contains(wf: Workflow, targetId: number, all: Workflow[], seen = new Se
 
 export default function WorkflowEditDialog({ open, initial, folders, projects = [], defaultProjectId, defaultFolderId, allWorkflows, onClose, onSaved }: Props) {
   const [w, setW] = useState<Workflow>(EMPTY);
+  // test results of steps run with "Test step" in this dialog: later steps use them as their upstream values
+  const [stepResults, setStepResults] = useState<Record<number, QueryResult>>({});
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [apiRequests, setApiRequests] = useState<ApiRequestDef[]>([]);
   const { loading, error, setError, run } = useAsync();
 
   useEffect(() => {
     if (!open) return;
+    setStepResults({});
     setW(initial ? structuredClone(initial) : { ...EMPTY, folderId: defaultFolderId ?? 0, projectId: defaultProjectId ?? projects[0]?.id ?? null });
     setError(null);
     void run(async () => { setQueries(await api.queries()); setApiRequests(await api.apiRequests()); });
@@ -232,8 +235,8 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                     </Stack>
                   );
                 })}
-                {(s.stepType ?? 'QUERY') === 'QUERY' && s.queryId > 0 && queryOf(s.queryId) && <StepTestRun key={`q${s.queryId}`} step={s} inputs={w.inputs} query={queryOf(s.queryId)} />}
-                {s.stepType === 'API_REQUEST' && s.apiRequestId && apiRequests.find((r) => r.id === s.apiRequestId) && <StepTestRun key={`a${s.apiRequestId}`} step={s} inputs={w.inputs} apiRequest={apiRequests.find((r) => r.id === s.apiRequestId)} />}
+                {(s.stepType ?? 'QUERY') === 'QUERY' && s.queryId > 0 && queryOf(s.queryId) && <StepTestRun key={`q${s.queryId}`} step={s} steps={w.steps} inputs={w.inputs} results={stepResults} onResult={(o, r) => setStepResults((c) => ({ ...c, [o]: r }))} query={queryOf(s.queryId)} />}
+                {s.stepType === 'API_REQUEST' && s.apiRequestId && apiRequests.find((r) => r.id === s.apiRequestId) && <StepTestRun key={`a${s.apiRequestId}`} step={s} steps={w.steps} inputs={w.inputs} results={stepResults} onResult={(o, r) => setStepResults((c) => ({ ...c, [o]: r }))} apiRequest={apiRequests.find((r) => r.id === s.apiRequestId)} />}
               </Stack>
             </Paper>
           ))}

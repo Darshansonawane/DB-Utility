@@ -83,3 +83,15 @@ describe('workflow step test values', () => {
     expect(knownValues(step, inputs)).toEqual({ a: '5', b: 'C1' });
   });
 });
+
+describe('step test values from an earlier step result', () => {
+  it('takes the first row of the tested step, by column or by output alias', () => {
+    const results = { 4: { columns: [{ name: 'id' }, { name: 'saving_wallet_contributor_id' }], rows: [[1, 2037], [2, 99]], rowCount: 2 } } as never;
+    const steps = [{ order: 4, outputFields: [{ alias: 'contributorId', column: 'saving_wallet_contributor_id' }], mappings: [] }, { order: 5, outputFields: [], mappings: [] }] as never;
+    const byColumn = { order: 5, mappings: [{ paramName: 'p', sourceType: 'STEP_OUTPUT', sourceRef: '4', sourceField: 'SAVING_wallet_contributor_id' }] } as never;
+    const byAlias = { order: 5, mappings: [{ paramName: 'p', sourceType: 'STEP_OUTPUT', sourceRef: '4', sourceField: 'contributorId' }] } as never;
+    expect(knownValues(byColumn, [], results, steps)).toEqual({ p: '2037' });
+    expect(knownValues(byAlias, [], results, steps)).toEqual({ p: '2037' });
+    expect(knownValues(byColumn, [], {}, steps)).toEqual({});
+  });
+});
