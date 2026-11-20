@@ -64,21 +64,3 @@ export function QuerySuccessBanner({ rowCount, affectedRows, durationMs, runKey 
     </Stack>
   );
 }
-
-/** The same database cylinder, endlessly receiving data packets: shown in a step header while it executes. */
-export function DbWorkingIcon({ size = 36 }: { size?: number }) {
-  return (
-    <svg className="db-success db-working" width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true" data-testid="db-working-icon">
-      <g className="db-cyl" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <ellipse cx="28" cy="12" rx="12" ry="4.5" />
-        <path d="M16 12v10c0 2.5 5.4 4.5 12 4.5s12-2 12-4.5V12" />
-        <path d="M16 22v10c0 2.5 5.4 4.5 12 4.5s12-2 12-4.5V22" />
-      </g>
-      <g fill="currentColor">
-        <rect className="db-packet p1" x="1" y="15" width="8" height="3.4" rx="1.7" />
-        <rect className="db-packet p2" x="1" y="22" width="8" height="3.4" rx="1.7" />
-        <rect className="db-packet p3" x="1" y="29" width="8" height="3.4" rx="1.7" />
-      </g>
-    </svg>
-  );
-}

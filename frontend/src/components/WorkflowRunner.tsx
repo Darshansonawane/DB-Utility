@@ -15,9 +15,6 @@ import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
 import StatusChip from './StatusChip';
 import FlowConnector, { flowStateOf } from './motion/FlowConnector';
-import StepCard from './motion/StepCard';
-import StepStage from './motion/StepStage';
-import { CountUp, DbSuccessIcon, DbWorkingIcon } from './motion/DbSuccess';
 
 type Overrides = Record<number, Record<string, string>>;
 
@@ -158,19 +155,11 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
         return (
           <Box key={s.order}>
           {idx > 0 && <FlowConnector state={flowStateOf(run?.steps.find((x) => x.order === workflow.steps[idx - 1].order)?.status)} />}
-          <StepCard status={sv.status}>
-          <StepStage order={s.order} name={s.name} status={sv.status} rows={sv.result?.rows.length ?? null} durationMs={sv.durationMs} error={sv.error} />
           <Accordion expanded={!!expanded[s.order]} onChange={(_, v) => setExpanded((e) => ({ ...e, [s.order]: v }))} disableGutters variant="outlined">
             <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-label={`step ${s.order}`}>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
-                <Box sx={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: sv.status === 'RUNNING' ? 'primary.main' : sv.status === 'SUCCESS' ? 'success.main' : 'text.disabled' }}>
-                  {sv.status === 'RUNNING' ? <DbWorkingIcon size={38} /> : sv.status === 'SUCCESS' ? <DbSuccessIcon key={`${sv.order}-${sv.durationMs}`} size={38} /> : null}
-                </Box>
                 <Typography fontWeight={700} sx={{ minWidth: 70 }}>Step {s.order}</Typography>
                 <Typography sx={{ flex: 1 }}>{s.name}</Typography>
-                {sv.status === 'SUCCESS' && sv.result && sv.result.columns.length > 0 && (
-                  <Typography variant="body2" color="success.main" className="badge-pop" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}><CountUp value={sv.result.rows.length} /> row{sv.result.rows.length === 1 ? '' : 's'}</Typography>
-                )}
                 <StatusChip status={sv.status} />
                 <Typography variant="caption" sx={{ minWidth: 60, textAlign: 'right' }}>{sv.status === 'PENDING' ? '' : ms(sv.durationMs)}</Typography>
               </Stack>
@@ -194,7 +183,6 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
               </Stack>
             </AccordionDetails>
           </Accordion>
-          </StepCard>
           </Box>
         );
       })}
