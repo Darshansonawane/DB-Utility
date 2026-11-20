@@ -13,6 +13,10 @@ export function readStoredMode(): ColorModePref {
   return 'system';
 }
 
+/** HelloGroup brand red and its shades: hover/active use dark, tints use light. Everything primary in the app derives from these. */
+export const BRAND_RED = '#E22042';
+const RED = { main: BRAND_RED, light: '#F0647D', dark: '#B8142F', contrastText: '#FFFFFF' };
+
 const EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 
 /** Shared polish: consistent radius, soft shadows, and subtle hover feedback (all of it is switched off for reduced motion in motion.css). */
@@ -30,7 +34,7 @@ const sharedComponents = {
   MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
   MuiTableRow: { styleOverrides: { root: { transition: `background-color 160ms ${EASE}` } } },
   MuiListItemButton: {
-    styleOverrides: { root: { transition: `background-color 160ms ${EASE}, padding-left 160ms ${EASE}`, '&:hover': { backgroundColor: 'rgba(30, 107, 255, 0.08)' } } },
+    styleOverrides: { root: { transition: `background-color 160ms ${EASE}, padding-left 160ms ${EASE}`, '&:hover': { backgroundColor: 'rgba(226, 32, 66, 0.08)' } } },
   },
   MuiTextField: { defaultProps: { variant: 'outlined' as const } },
 };
@@ -42,13 +46,13 @@ const base = {
 };
 export const lightTheme = createTheme({
   ...base,
-  palette: { mode: 'light', primary: { main: '#0b3a6f' }, secondary: { main: '#00897b' }, background: { default: '#f3f6fb' } },
+  palette: { mode: 'light', primary: RED, secondary: { main: '#00897b' }, background: { default: '#f3f6fb' } },
 });
 export const darkTheme = createTheme({
   ...base,
   palette: {
     mode: 'dark',
-    primary: { main: '#4d8dff' },
+    primary: { ...RED, light: '#FF8FA3' },
     secondary: { main: '#26c6b5' },
     background: { default: '#07142b', paper: '#0d2147' },
   },

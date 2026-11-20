@@ -47,7 +47,7 @@ public class QueryLibraryService {
     }
 
     public SavedQuery get(long id) {
-        return repo.findById(id).orElseThrow(() -> ApiException.notFound("Saved query not found"));
+        return repo.findById(id).orElseThrow(() -> ApiException.notFound("Query not found"));
     }
 
     public SavedQuery create(SavedQuery q) {
@@ -80,12 +80,23 @@ public class QueryLibraryService {
         audit.record("QUERY_DELETED", null, q.sql(), null, null, "SUCCESS", q.name());
     }
 
+    public java.util.Map<Long, Long> folderAssignments() {
+        return repo.folderAssignments();
+    }
+
+    public void moveToFolder(long id, long folderId) {
+        get(id);
+        repo.setFolder(id, folderId);
+    }
+
     public SavedQuery duplicate(long id) {
         SavedQuery q = get(id);
         String base = q.name() + " (copy)";
         String name = base;
         for (int i = 2; repo.findByName(name).isPresent(); i++) name = base + " " + i;
-        return create(new SavedQuery(null, name, q.description(), q.category(), q.sql(), q.queryType(), q.environments(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine()));
+        SavedQuery copy = create(new SavedQuery(null, name, q.description(), q.category(), q.sql(), q.queryType(), q.environments(), q.enabled(), q.databaseName(), q.parameters(), q.extractions(), q.engine()));
+        repo.setFolder(copy.id(), repo.folderOf(id));
+        return copy;
     }
 
     public SavedQuery setEnabled(long id, boolean enabled) {

@@ -28,7 +28,7 @@ export default function ApiAutomation() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={700}>API Automation</Typography>
+      <Typography variant="h5" fontWeight={700}>API Manager</Typography>
       <Typography variant="body2" color="text.secondary">
         Call your QA/Staging APIs, save values from the responses (such as a new wallet id) into variables, feed them into SQL queries, and use them in workflows as {'{{name}}'}.
       </Typography>

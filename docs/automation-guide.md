@@ -1,12 +1,12 @@
-# DB-Utility – API, SQL and variable automation
+# HelloDB Hub – API, SQL and variable automation
 
 ## Where things are
 | Area | What it does |
 |---|---|
-| API Automation → **Requests Storage** | Saved API requests in nested folders (module / feature). Import from cURL, pre-request JavaScript, extraction rules. |
-| API Automation → **API Workflows** | Ordered **API** and **SQL** steps with wait / polling / assertions. Run many at once. Folder organised. |
-| API Automation → **Runs / Reports** | Live runs, history (clear all or selected), per-workflow reports + CSV. |
-| API Automation → **Variables** | One store for API-extracted, SQL-extracted and manual values. Folders + scopes. |
+| API Manager → **Requests Storage** | Saved API requests in nested folders (module / feature). Import from cURL, pre-request JavaScript, extraction rules. |
+| API Manager → **API Workflows** | Ordered **API** and **SQL** steps with wait / polling / assertions. Run many at once. Folder organised. |
+| API Manager → **Runs / Reports** | Live runs, history (clear all or selected), per-workflow reports + CSV. |
+| API Manager → **Variables** | One store for API-extracted, SQL-extracted and manual values. Folders + scopes. |
 | **Workflow Manager** | DB workflows; a step may be a DB query *or* an API request. |
 | **All-in-One Information** | Folder-organised Markdown pages (modules, APIs, tables, runbooks). |
 
@@ -16,7 +16,7 @@ Folders only organise: deleting a folder never deletes what is inside, items mov
 ## API response → SQL → variable → anything
 1. Send a request. Under the response, tick the fields to keep (e.g. `data.displayAccountNumber`), name them, choose the
    Variables folder, and optionally *remember as extraction rules* so every run repeats it.
-2. Open the saved query (Saved Queries). Set the parameter's **Default / mapped variable** to `{{displayAccountNumber}}`.
+2. Open the saved query (Queries Manager). Set the parameter's **Default / mapped variable** to `{{displayAccountNumber}}`.
    The runner shows **Parameter values (resolved before running)**; a missing variable is reported before any SQL runs.
    The value is bound as a JDBC parameter, never concatenated into the SQL.
 3. In the query's **Save result values as variables** add `id → savingsWalletDetailsId` (folder Savings). After each run the

@@ -19,8 +19,8 @@ export default function Settings() {
       {saved && <Alert severity="success">Settings saved and recorded in the audit log.</Alert>}
       <Card><CardContent>
         <Stack spacing={2}>
-          <FormControlLabel control={<Switch checked={s.readOnlyMode} onChange={flag('readOnlyMode')} />} label="Read-only mode (blocks INSERT / UPDATE / DELETE from Saved Queries and the SQL editor)" />
-          {!s.readOnlyMode && <Alert severity="warning">Writes from Saved Queries and the SQL editor are enabled: each still needs a preview and an explicit confirmation, stays within the affected-row limit and is audited. Workflow steps run INSERT / UPDATE / DELETE automatically (whatever this switch says) using the database user's own privileges.</Alert>}
+          <FormControlLabel control={<Switch checked={s.readOnlyMode} onChange={flag('readOnlyMode')} />} label="Read-only mode (blocks INSERT / UPDATE / DELETE from the Queries Manager and the SQL editor)" />
+          {!s.readOnlyMode && <Alert severity="warning">Writes from the Queries Manager and the SQL editor are enabled: each still needs a preview and an explicit confirmation, stays within the affected-row limit and is audited. Workflow steps run INSERT / UPDATE / DELETE automatically (whatever this switch says) using the database user's own privileges.</Alert>}
           <FormControlLabel control={<Switch checked={s.adHocWritesEnabled} onChange={flag('adHocWritesEnabled')} />} label="Allow ad-hoc writes from the SQL Editor (otherwise writes must be saved queries)" />
           <FormControlLabel control={<Switch checked={s.maskSensitiveData} onChange={flag('maskSensitiveData')} />} label="Mask identifiers in history and audit logs" />
           <TextField size="small" type="number" label="Maximum result rows" value={s.maxResultRows} onChange={num('maxResultRows')} />

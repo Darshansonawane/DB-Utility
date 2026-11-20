@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Button, ToggleButton, ToggleButtonGroup, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Paper,
-  Autocomplete, Stack, TextField, Typography,
+  Chip, Stack, TextField, Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -10,6 +10,7 @@ import ApiStepOptionsEditor, { DEFAULT_OPTIONS } from './ApiStepOptionsEditor';
 import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
+import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import { folderPaths } from './folders/folderUtils';
 import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
@@ -65,25 +66,62 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
       ? { stepType: t, queryId: 0, mappings: [], apiRequestId: null, apiOptions: null, outputFields: [], subWorkflowId: null }
       : { stepType: t, apiRequestId: null, apiOptions: null, subWorkflowId: null, mappings: [] });
 
-  /** Choosing a workflow to nest: one mapping row per input of that workflow. */
-  const pickWorkflow = (i: number, sub: Workflow | null) => updStep(i, {
-    subWorkflowId: sub?.id ?? null, subWorkflowName: sub?.name,
-    name: w.steps[i].name || (sub?.name ?? ''),
-    mappings: (sub?.inputs ?? []).map((inp): ParamMapping => ({
-      paramName: inp.name, sourceType: 'INPUT', sourceRef: w.inputs.find((x) => x.name === inp.name)?.name ?? w.inputs[0]?.name ?? '',
-    })),
-  });
+  /** Auto-wire a parameter to a workflow input of the same name; anything else is simply supplied at runtime (no mapping needed). */
+  const wireSameName = (names: string[]): ParamMapping[] => names
+    .filter((n) => w.inputs.some((x) => x.name === n))
+    .map((n): ParamMapping => ({ paramName: n, sourceType: 'INPUT', sourceRef: n }));
 
-  const pickQuery = (i: number, queryId: number) => {
-    const q = queryOf(queryId);
-    updStep(i, { queryId, mappings: (q?.parameters ?? []).map((p): ParamMapping => ({ paramName: p.name, sourceType: 'INPUT', sourceRef: w.inputs[0]?.name ?? '' })) });
+  /** Everything a step can run, in one searchable list. Workflows that would create a loop are left out. */
+  const targetItems = useMemo<TargetItem[]>(() => [
+    ...queries.map((q): TargetItem => ({ type: 'QUERY', id: q.id!, name: q.name, description: q.description, meta: [q.category, q.engine === 'MONGODB' ? 'MongoDB' : 'MySQL', q.queryType].filter(Boolean).join(' ') })),
+    ...apiRequests.map((r): TargetItem => ({ type: 'API_REQUEST', id: r.id!, name: r.name, description: r.description, meta: `${r.method} ${r.url}` })),
+    ...pickable.map((x): TargetItem => ({ type: 'WORKFLOW', id: x.id!, name: x.name, description: x.description, meta: x.folderId ? paths.get(x.folderId) : null })),
+  ], [queries, apiRequests, pickable, paths]);
+
+  /** Choose the target of step i. An item of another type switches the step's type in the same update, so a step never mixes types. */
+  const pickTarget = (i: number, item: TargetItem | null, currentType: 'QUERY' | 'API_REQUEST' | 'WORKFLOW') => {
+    const s = w.steps[i];
+    if (!item) {
+      updStep(i, currentType === 'API_REQUEST' ? { apiRequestId: null, apiRequestName: undefined, mappings: [] }
+        : currentType === 'WORKFLOW' ? { subWorkflowId: null, subWorkflowName: undefined, mappings: [] } : { queryId: 0, queryName: undefined, mappings: [] });
+      return;
+    }
+    if (item.type === 'API_REQUEST') {
+      updStep(i, { stepType: 'API_REQUEST', queryId: 0, subWorkflowId: null, subWorkflowName: undefined, apiRequestId: item.id, apiRequestName: item.name, name: s.name || item.name, mappings: [],
+        apiOptions: s.apiOptions ?? { ...DEFAULT_OPTIONS } });
+    } else if (item.type === 'WORKFLOW') {
+      const sub = allWorkflows.find((x) => x.id === item.id) ?? null;
+      updStep(i, { stepType: 'WORKFLOW', queryId: 0, apiRequestId: null, apiRequestName: undefined, apiOptions: null, outputFields: [], subWorkflowId: item.id, subWorkflowName: item.name,
+        name: s.name || item.name, mappings: wireSameName((sub?.inputs ?? []).map((inp) => inp.name)) });
+    } else {
+      const q = queryOf(item.id);
+      updStep(i, { stepType: 'QUERY', apiRequestId: null, apiRequestName: undefined, apiOptions: null, subWorkflowId: null, subWorkflowName: undefined, queryId: item.id, queryName: item.name,
+        name: s.name || item.name, mappings: wireSameName((q?.parameters ?? []).map((p) => p.name)) });
+    }
   };
 
-  const updMap = (si: number, mi: number, patch: Partial<ParamMapping>) =>
-    updStep(si, { mappings: w.steps[si].mappings.map((m, k) => (k === mi ? { ...m, ...patch } : m)) });
+  /** The parameters a step needs values for: its query's parameters, or the nested workflow's inputs. */
+  const paramsOf = (s: WorkflowStep): { name: string; label: string; type: ParamType; required: boolean; defaultValue?: string | null }[] => {
+    if (s.stepType === 'WORKFLOW') return (allWorkflows.find((x) => x.id === s.subWorkflowId)?.inputs ?? []).map((i) => ({ name: i.name, label: i.label, type: i.type, required: i.required, defaultValue: i.defaultValue }));
+    if (s.stepType === 'API_REQUEST') return [];
+    return (queryOf(s.queryId)?.parameters ?? []).map((p) => ({ name: p.name, label: p.label, type: p.type, required: p.required, defaultValue: p.defaultValue }));
+  };
+
+  /** Runtime = no mapping: the Run dialog asks for the value. Any other source sets (or replaces) the mapping. */
+  const setSource = (si: number, paramName: string, source: 'RUNTIME' | SourceType) => {
+    const others = w.steps[si].mappings.filter((m) => m.paramName !== paramName);
+    if (source === 'RUNTIME') return updStep(si, { mappings: others });
+    const m: ParamMapping = source === 'INPUT' ? { paramName, sourceType: 'INPUT', sourceRef: w.inputs[0]?.name ?? '' }
+      : source === 'STEP_OUTPUT' ? { paramName, sourceType: 'STEP_OUTPUT', sourceRef: '', sourceField: '' }
+        : { paramName, sourceType: 'CONSTANT', constantValue: '' };
+    updStep(si, { mappings: [...others, m] });
+  };
+  const patchMap = (si: number, paramName: string, patch: Partial<ParamMapping>) =>
+    updStep(si, { mappings: w.steps[si].mappings.map((m) => (m.paramName === paramName ? { ...m, ...patch } : m)) });
 
   const save = async () => {
-    const saved = await run(() => (w.id ? api.updateWorkflow(w.id, w) : api.createWorkflow(w)));
+    const clean: Workflow = { ...w, steps: w.steps.map((st) => ({ ...st, mappings: st.mappings.filter((m) => m.sourceType !== 'INPUT' || (m.sourceRef ?? '') !== '') })) };
+    const saved = await run(() => (clean.id ? api.updateWorkflow(clean.id, clean) : api.createWorkflow(clean)));
     if (saved) onSaved();
   };
 
@@ -136,22 +174,12 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                     <ToggleButton value="API_REQUEST">API request</ToggleButton>
                     <ToggleButton value="WORKFLOW">Workflow</ToggleButton>
                   </ToggleButtonGroup>
-                  {s.stepType === 'WORKFLOW' ? (
-                    <Autocomplete size="small" sx={{ minWidth: 300 }} options={pickable} value={pickable.find((x) => x.id === s.subWorkflowId) ?? null}
-                      getOptionLabel={(o) => `${o.name}${o.folderId ? `  (${paths.get(o.folderId) ?? ''})` : ''}`}
-                      onChange={(_, v) => pickWorkflow(i, v)} renderInput={(p) => <TextField {...p} label="Workflow to run" />} />
-                  ) : s.stepType === 'API_REQUEST' ? (
-                    <TextField size="small" select label="API request" sx={{ minWidth: 300 }} value={s.apiRequestId ?? ''}
-                      onChange={(e) => { const r = apiRequests.find((x) => x.id === Number(e.target.value)); updStep(i, { apiRequestId: Number(e.target.value), apiRequestName: r?.name, name: s.name || (r?.name ?? '') }); }}>
-                      {apiRequests.map((r) => <MenuItem key={r.id} value={r.id}>{r.method} {r.name}</MenuItem>)}
-                    </TextField>
-                  ) : (
-                    <TextField size="small" select label="Query" sx={{ minWidth: 300 }} value={s.queryId || ''} onChange={(e) => pickQuery(i, Number(e.target.value))}>
-                      {queries.map((q) => <MenuItem key={q.id} value={q.id}>{q.name}</MenuItem>)}
-                    </TextField>
-                  )}
                   <IconButton aria-label="remove step" onClick={() => setW({ ...w, steps: w.steps.filter((_, k) => k !== i) })}><DeleteIcon /></IconButton>
                 </Stack>
+                <StepTargetPicker stepType={s.stepType ?? 'QUERY'} items={targetItems} onPick={(item) => pickTarget(i, item, s.stepType ?? 'QUERY')}
+                  value={s.stepType === 'WORKFLOW' ? (s.subWorkflowId ? { type: 'WORKFLOW', id: s.subWorkflowId } : null)
+                    : s.stepType === 'API_REQUEST' ? (s.apiRequestId ? { type: 'API_REQUEST', id: s.apiRequestId } : null)
+                      : (s.queryId ? { type: 'QUERY', id: s.queryId } : null)} />
                 <Stack direction="row" spacing={1}>
                   <TextField size="small" label="Depends on (step orders, comma separated)" value={s.dependsOn.join(',')} onChange={(e) => updStep(i, { dependsOn: e.target.value.split(',').map((x) => parseInt(x.trim(), 10)).filter((x) => !Number.isNaN(x)) })} />
                   {s.stepType === 'WORKFLOW' ? <Typography variant="caption" color="text.secondary" sx={{ flex: 1, alignSelf: 'center' }}>All outputs of the nested workflow's steps become this step's outputs.</Typography> : <TextField size="small" label="Output fields (optional: alias=COLUMN, ...)" fullWidth value={s.outputFields.map((o) => `${o.alias}=${o.column}`).join(', ')}
@@ -165,26 +193,47 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                     <AccordionDetails><ApiStepOptionsEditor value={s.apiOptions ?? DEFAULT_OPTIONS} onChange={(apiOptions) => updStep(i, { apiOptions })} /></AccordionDetails>
                   </Accordion>
                 )}
-                {s.mappings.map((m, mi) => (
-                  <Stack key={mi} direction="row" spacing={1} alignItems="center">
-                    <Typography sx={{ minWidth: 190, fontFamily: 'monospace' }} variant="body2">{m.paramName} ←</Typography>
-                    <TextField size="small" select label="Source" sx={{ minWidth: 150 }} value={m.sourceType} onChange={(e) => updMap(i, mi, { sourceType: e.target.value as SourceType })}>
-                      <MenuItem value="INPUT">Workflow input</MenuItem><MenuItem value="STEP_OUTPUT">Earlier step output</MenuItem><MenuItem value="CONSTANT">Constant</MenuItem>
-                    </TextField>
-                    {m.sourceType === 'INPUT' && (
-                      <TextField size="small" select label="Input" sx={{ minWidth: 180 }} value={m.sourceRef ?? ''} onChange={(e) => updMap(i, mi, { sourceRef: e.target.value })}>
-                        {w.inputs.map((x) => <MenuItem key={x.name} value={x.name}>{x.label || x.name}</MenuItem>)}
+                {paramsOf(s).length > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    Where each value comes from. <b>Runtime</b> means nothing is wired: the Run dialog asks for it (or uses the parameter's default).
+                  </Typography>
+                )}
+                {paramsOf(s).map((p) => {
+                  const m = s.mappings.find((x) => x.paramName === p.name);
+                  const source = m?.sourceType ?? 'RUNTIME';
+                  return (
+                    <Stack key={p.name} direction="row" spacing={1} alignItems="center" data-testid={`mapping-${i}-${p.name}`}>
+                      <Typography sx={{ minWidth: 190, fontFamily: 'monospace' }} variant="body2">
+                        {p.name}{p.required ? <Typography component="span" color="error.main"> *</Typography> : null} ←
+                      </Typography>
+                      <TextField size="small" select label="Source" sx={{ minWidth: 220 }} value={source} onChange={(e) => setSource(i, p.name, e.target.value as 'RUNTIME' | SourceType)}
+                        inputProps={{ 'aria-label': `source of ${p.name}` }}>
+                        <MenuItem value="RUNTIME">Runtime (ask when running)</MenuItem>
+                        <MenuItem value="INPUT" disabled={w.inputs.length === 0}>Workflow input{w.inputs.length === 0 ? ' (add an input first)' : ''}</MenuItem>
+                        <MenuItem value="STEP_OUTPUT">Earlier step output</MenuItem>
+                        <MenuItem value="CONSTANT">Constant</MenuItem>
                       </TextField>
-                    )}
-                    {m.sourceType === 'STEP_OUTPUT' && (
-                      <>
-                        <TextField size="small" label="Step order" sx={{ width: 110 }} value={m.sourceRef ?? ''} onChange={(e) => updMap(i, mi, { sourceRef: e.target.value })} />
-                        <TextField size="small" label="Output alias, column or response path" sx={{ minWidth: 260 }} placeholder="id  /  data.items.0.id  /  rows.1.id" value={m.sourceField ?? ''} onChange={(e) => updMap(i, mi, { sourceField: e.target.value })} />
-                      </>
-                    )}
-                    {m.sourceType === 'CONSTANT' && <TextField size="small" label="Value" value={m.constantValue ?? ''} onChange={(e) => updMap(i, mi, { constantValue: e.target.value })} />}
-                  </Stack>
-                ))}
+                      {source === 'RUNTIME' && (
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip size="small" color="primary" variant="outlined" label="Runtime" />
+                          <Typography variant="caption" color="text.secondary">{(p.defaultValue ?? '').trim() ? `Default if left empty: ${p.defaultValue}` : p.required ? 'Required: you will be asked when running' : 'Optional: may stay empty'}</Typography>
+                        </Stack>
+                      )}
+                      {m?.sourceType === 'INPUT' && (
+                        <TextField size="small" select label="Input" sx={{ minWidth: 180 }} value={m.sourceRef ?? ''} onChange={(e) => patchMap(i, p.name, { sourceRef: e.target.value })}>
+                          {w.inputs.map((x) => <MenuItem key={x.name} value={x.name}>{x.label || x.name}</MenuItem>)}
+                        </TextField>
+                      )}
+                      {m?.sourceType === 'STEP_OUTPUT' && (
+                        <>
+                          <TextField size="small" label="Step order" sx={{ width: 110 }} value={m.sourceRef ?? ''} onChange={(e) => patchMap(i, p.name, { sourceRef: e.target.value })} />
+                          <TextField size="small" label="Output alias, column or response path" sx={{ minWidth: 260 }} placeholder="id  /  data.items.0.id  /  rows.1.id" value={m.sourceField ?? ''} onChange={(e) => patchMap(i, p.name, { sourceField: e.target.value })} />
+                        </>
+                      )}
+                      {m?.sourceType === 'CONSTANT' && <TextField size="small" label="Value" value={m.constantValue ?? ''} onChange={(e) => patchMap(i, p.name, { constantValue: e.target.value })} />}
+                    </Stack>
+                  );
+                })}
               </Stack>
             </Paper>
           ))}

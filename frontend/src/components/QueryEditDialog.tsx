@@ -34,7 +34,7 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
 
   const detect = async () => {
     const a = await run(() => (mongo ? api.mongoAnalyze(q.sql) : api.analyzeSql(q.sql)));
-    if (a) setQ((cur) => ({ ...cur, queryType: a.write ? 'WRITE' : 'READ', parameters: a.suggestedParameters.map((s, i) => ({ ...s, ...(cur.parameters[i] && cur.parameters.length === a.placeholders ? { name: cur.parameters[i].name, label: cur.parameters[i].label, type: cur.parameters[i].type } : {}) })) }));
+    if (a) setQ((cur) => ({ ...cur, queryType: a.write ? 'WRITE' : 'READ', parameters: a.suggestedParameters.map((s, i) => ({ ...s, ...(cur.parameters[i] && cur.parameters.length === a.placeholders ? { name: cur.parameters[i].name, label: cur.parameters[i].label, type: cur.parameters[i].type, required: cur.parameters[i].required, defaultValue: cur.parameters[i].defaultValue } : {}) })) }));
   };
 
   const save = async () => {
@@ -44,7 +44,7 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{q.id ? 'Edit saved query' : 'Save query'}</DialogTitle>
+      <DialogTitle>{q.id ? 'Edit query' : 'New query'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           {error && <Alert severity="error">{error}</Alert>}
@@ -77,6 +77,9 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
             {q.queryType && <Typography variant="body2">Classified as <b>{q.queryType}</b> (derived from the SQL)</Typography>}
           </Stack>
           <Typography variant="subtitle2">Parameters (one per "?", in order): these generate the input form</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: '-8px !important' }}>
+            Detected parameters are supplied at <b>Runtime</b>: you are asked for the value when the query or workflow runs, so nothing has to be stored here. Switch one to <b>Default value</b> only when it should have a fallback or test value.
+          </Typography>
           <ParamDefinitionEditor parameters={q.parameters} onChange={(parameters) => setQ({ ...q, parameters })} />
           {q.queryType !== 'WRITE' && <QueryExtractionEditor value={q.extractions ?? []} folders={varFolders.folders} onChange={(extractions) => setQ({ ...q, extractions })} />}
           <Stack direction="row" spacing={2} alignItems="center">

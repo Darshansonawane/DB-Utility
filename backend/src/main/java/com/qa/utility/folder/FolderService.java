@@ -21,10 +21,10 @@ import java.util.stream.Collectors;
  */
 @Service
 public class FolderService {
-    public static final Set<String> KINDS = Set.of("REQUEST", "API_WORKFLOW", "VARIABLE", "INFO", "WORKFLOW");
+    public static final Set<String> KINDS = Set.of("REQUEST", "API_WORKFLOW", "VARIABLE", "INFO", "WORKFLOW", "QUERY");
     private static final int MAX_DEPTH = 8;
     private static final Map<String, String> ITEM_TABLE = Map.of(
-            "REQUEST", "api_request", "API_WORKFLOW", "api_workflow", "VARIABLE", "api_variable", "INFO", "info_item", "WORKFLOW", "workflow");
+            "REQUEST", "api_request", "API_WORKFLOW", "api_workflow", "VARIABLE", "api_variable", "INFO", "info_item", "WORKFLOW", "workflow", "QUERY", "saved_query");
 
     private final JdbcTemplate jdbc;
     private final AuditService audit;

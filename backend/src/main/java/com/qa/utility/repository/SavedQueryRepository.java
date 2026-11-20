@@ -84,6 +84,21 @@ public class SavedQueryRepository {
         saveParams(id, q.parameters());
     }
 
+    /** query id -> folder id, for queries that sit in a folder (0 / missing = Unfiled). */
+    public Map<Long, Long> folderAssignments() {
+        Map<Long, Long> out = new LinkedHashMap<>();
+        jdbc.query("SELECT id, folder_id FROM saved_query WHERE folder_id <> 0", rs -> { out.put(rs.getLong(1), rs.getLong(2)); });
+        return out;
+    }
+
+    public long folderOf(long id) {
+        return jdbc.queryForList("SELECT folder_id FROM saved_query WHERE id = ?", Long.class, id).stream().findFirst().orElse(0L);
+    }
+
+    public void setFolder(long id, long folderId) {
+        jdbc.update("UPDATE saved_query SET folder_id = ? WHERE id = ?", folderId, id);
+    }
+
     public void setEnabled(long id, boolean enabled) {
         jdbc.update("UPDATE saved_query SET enabled = ?, updated_at=CURRENT_TIMESTAMP WHERE id = ?", enabled, id);
     }

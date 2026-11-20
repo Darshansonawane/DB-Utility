@@ -15,6 +15,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
 import Logo from '../components/brand/Logo';
+import { APP_ATTRIBUTION, APP_NAME, APP_SUBTITLE, APP_TAGLINE } from '../brand';
 import LogoMark from '../components/brand/LogoMark';
 import ColorModeToggle from '../components/brand/ColorModeToggle';
 import DatabaseSelect from '../components/DatabaseSelect';
@@ -23,7 +24,6 @@ import { envColor, envLabel } from '../utils/environments';
 const WIDTH = 240;
 const COLLAPSED_WIDTH = 72;
 const SIDEBAR_KEY = 'dbutility.sidebarCollapsed';
-const TAGLINE = 'Connect APIs, databases and business workflows.';
 
 function readCollapsed(): boolean {
   try { return localStorage.getItem(SIDEBAR_KEY) === '1'; } catch { return false; }
@@ -33,10 +33,10 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: <DashboardIcon /> },
   { to: '/connections', label: 'Database Connections', icon: <StorageIcon /> },
  // { to: '/sql-editor', label: 'SQL Editor', icon: <CodeIcon /> },
-  { to: '/queries', label: 'Saved Queries', icon: <BookmarksIcon /> },
+  { to: '/queries', label: 'Queries Manager', icon: <BookmarksIcon /> },
   { to: '/workflows', label: 'Workflow Manager', icon: <AccountTreeIcon /> },
 //  { to: '/savings-wallet', label: 'Savings Wallet Workflow', icon: <SavingsIcon /> },
-  { to: '/api-automation', label: 'API Automation', icon: <ApiIcon /> },
+  { to: '/api-automation', label: 'API Manager', icon: <ApiIcon /> },
   { to: '/history', label: 'Execution History', icon: <HistoryIcon /> },
   { to: '/settings', label: 'Settings', icon: <SettingsIcon /> },
   { to: '/info', label: 'All-in-One Information', icon: <MenuBookIcon /> },
@@ -58,11 +58,14 @@ export default function AppLayout() {
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
         <Toolbar>
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'common.white' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, color: 'common.white' }}>
               <LogoMark size={30} title="" />
-              <Typography variant="h6" component="h1" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>DB-Utility</Typography>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" component="h1" noWrap sx={{ fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{APP_NAME}</Typography>
+                <Typography variant="caption" component="p" noWrap sx={{ m: 0, opacity: 0.75, lineHeight: 1.1, display: { xs: 'none', sm: 'block' } }}>{APP_SUBTITLE}</Typography>
+              </Box>
             </Box>
-            <Typography variant="caption" noWrap sx={{ display: { xs: 'none', lg: 'block' }, opacity: 0.7 }}>{TAGLINE}</Typography>
+            <Typography variant="caption" noWrap sx={{ display: { xs: 'none', lg: 'block' }, opacity: 0.7, fontStyle: 'italic' }}>{APP_TAGLINE}</Typography>
           </Box>
           <ColorModeToggle />
           {status?.connected && (
@@ -111,9 +114,12 @@ export default function AppLayout() {
           </Tooltip>
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flex: 1, p: 3, minWidth: 0 }}>
+      <Box component="main" sx={{ flex: 1, p: 3, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Toolbar />
-        <Box key={location.pathname} className="page-enter"><Outlet /></Box>
+        <Box key={location.pathname} className="page-enter" sx={{ flex: 1 }}><Outlet /></Box>
+        <Box component="footer" sx={{ mt: 4, pt: 2, borderTop: 1, borderColor: 'divider', textAlign: 'center' }}>
+          <Typography variant="caption" color="text.secondary">{APP_NAME} · {APP_ATTRIBUTION}</Typography>
+        </Box>
       </Box>
     </Box>
   );

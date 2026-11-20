@@ -23,7 +23,7 @@ public class MongoAdapter implements DbAdapter {
 
     static MongoClient build(ConnectionProfile p, ConnectionSecrets s) {
         MongoClientSettings.Builder b = MongoClientSettings.builder()
-                .applicationName("DB-Utility")
+                .applicationName("HelloDB Hub")
                 .applyToClusterSettings(c -> c.serverSelectionTimeout(10, TimeUnit.SECONDS))
                 .applyToSocketSettings(x -> x.connectTimeout(10, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS))
                 .applyToConnectionPoolSettings(x -> x.maxSize(3).minSize(0));

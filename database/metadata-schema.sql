@@ -282,6 +282,8 @@ ALTER TABLE api_workflow_step ADD COLUMN IF NOT EXISTS param_values_json TEXT;
 
 -- Saved queries can save values from their first result row into variables.
 ALTER TABLE saved_query ADD COLUMN IF NOT EXISTS extractions_json TEXT;
+-- Queries Manager folders (folder.kind = 'QUERY'); 0 = Unfiled.
+ALTER TABLE saved_query ADD COLUMN IF NOT EXISTS folder_id BIGINT DEFAULT 0 NOT NULL;
 
 -- ---------------------------------------------------------------- All-in-One Information
 CREATE TABLE IF NOT EXISTS info_item (

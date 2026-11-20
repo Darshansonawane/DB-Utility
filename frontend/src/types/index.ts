@@ -172,7 +172,7 @@ export interface WorkflowReport {
 }
 export interface OverviewRow { workflowId: number; workflowName: string; steps: number; runs: number; passRate: number; avgMs: number; lastStatus?: string; lastRunAt?: string }
 
-export type FolderKind = 'REQUEST' | 'API_WORKFLOW' | 'VARIABLE' | 'INFO' | 'WORKFLOW';
+export type FolderKind = 'REQUEST' | 'API_WORKFLOW' | 'VARIABLE' | 'INFO' | 'WORKFLOW' | 'QUERY';
 export interface Folder { id: number; kind: FolderKind; parentId: number; name: string; projectId?: number }
 export interface VariableBody { name?: string; value?: string | null; secret: boolean; scope: string; folderId?: number | null; environment?: string }
 export interface TokenInfo { token: string; name: string; found: boolean; value?: string | null; origin: string; secret: boolean }

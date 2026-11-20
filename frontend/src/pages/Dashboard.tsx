@@ -6,6 +6,7 @@ import type { Dashboard as D } from '../types';
 import StatusChip from '../components/StatusChip';
 import { StatSkeleton, TableSkeleton } from '../components/Skeletons';
 import { envLabel } from '../utils/environments';
+import { APP_TAGLINE } from '../brand';
 
 function Stat({ label, value, color, i = 0 }: { label: string; value: React.ReactNode; color?: string; i?: number }) {
   return (
@@ -26,7 +27,10 @@ export default function Dashboard() {
   const c = d?.connection;
   return (
     <Stack spacing={3}>
-      <Typography variant="h5">Dashboard</Typography>
+      <Box>
+        <Typography variant="h5">Dashboard</Typography>
+        <Typography variant="body2" color="text.secondary">{APP_TAGLINE}</Typography>
+      </Box>
       {error && <Alert severity="error">{error}</Alert>}
       {!loaded ? (
         <>
@@ -41,7 +45,7 @@ export default function Dashboard() {
             <Stat i={2} label="Connection status" value={<Chip color={c?.connected ? 'success' : 'default'} label={c?.connected ? `Connected (${c.latencyMs} ms)` : (c?.message ?? 'Unknown')} />} />
           </Stack>
           <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-            <Stat i={3} label="Saved queries" value={d?.savedQueries ?? '-'} />
+            <Stat i={3} label="Queries" value={d?.savedQueries ?? '-'} />
             <Stat i={4} label="Saved workflows" value={d?.workflows ?? '-'} />
             <Stat i={5} label="Successful executions" value={d?.successfulExecutions ?? '-'} color="success.main" />
             <Stat i={6} label="Failed executions" value={d?.failedExecutions ?? '-'} color="error.main" />

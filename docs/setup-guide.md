@@ -37,7 +37,7 @@ On first start the backend creates `~/.qa-database-utility/` (metadata DB and en
 ## First use
 
 1. **Database Connections -> New connection.** Choose the database type (MySQL or MongoDB) and environment (QA, Staging or Development). MySQL: host, port, username, password. MongoDB: host and port, or a connection string (`mongodb://...` / `mongodb+srv://...`), optional username/password, authentication database and TLS. No database name is needed: after connecting, the databases the database user can access are discovered and chosen in the top bar or in the query workspace, and you can switch between them without reconnecting. Choose an **access password** for the connection (needed later to connect, test, edit or delete it). Click **Test connection**, save, then **Connect**. You can connect several connections of both types at once; **Use** picks which one queries run on.
-2. **SQL Editor** or **Saved Queries** to run SELECTs. Writes are blocked until you turn read-only mode off in **Settings**.
+2. **Queries Manager** to run SELECTs. Writes are blocked until you turn read-only mode off in **Settings**.
 3. **Savings Wallet Workflow**: enter Customer ID and Savings Wallet Contributor ID, click **Fetch All Details**.
 
 ## Optional configuration
@@ -53,7 +53,7 @@ Existing connections from an earlier version keep working after the upgrade, but
 
 Workflow Manager: create a **project** (for example Savings Wallet), then folders and workflows inside it. Existing workflows and folders from an earlier version are moved into a "Default Project" automatically (nothing is lost); rename it or move workflows to your own projects. Workflow steps may run INSERT / UPDATE / DELETE: they execute automatically with the database user's own privileges, so use a connection whose account has only the grants your flows need.
 
-MongoDB queries: Saved Queries -> New query -> Database type **MongoDB**, for example `{"collection":"customers","filter":{"customerId":"?"},"limit":50}`. Operations: find, count, aggregate, distinct (read-only).
+MongoDB queries: Queries Manager -> New query -> Database type **MongoDB**, for example `{"collection":"customers","filter":{"customerId":"?"},"limit":50}`. Operations: find, count, aggregate, distinct (read-only).
 
 For a shared server set `qa-utility.cookie-secure=true` (HTTPS only), a strong `QA_UTILITY_MASTER_KEY`, and put the app behind your company TLS terminator. `qa-utility.session-idle-minutes` (default 480) closes the live connections of an idle browser session.
 

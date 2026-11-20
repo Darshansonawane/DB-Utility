@@ -12,7 +12,7 @@ import WritePreviewDialog from './WritePreviewDialog';
 import ExtractPicker from './apiauto/ExtractPicker';
 import { useFolders } from './folders/FolderTree';
 
-/** Runs any saved query: generated form -> (preview + confirmation for writes) -> result. */
+/** Runs any query from the Queries Manager: generated form -> (preview + confirmation for writes) -> result. */
 export default function QueryRunner({ query }: { query: SavedQuery }) {
   const [values, setValues] = useState<Record<string, string>>(initialValues(query.parameters));
   const [result, setResult] = useState<QueryResult | null>(null);

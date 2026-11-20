@@ -17,14 +17,30 @@ public class QueryController {
     }
 
     private final QueryLibraryService service;
+    private final com.qa.utility.folder.FolderService folders;
 
-    public QueryController(QueryLibraryService service) {
+    public QueryController(QueryLibraryService service, com.qa.utility.folder.FolderService folders) {
         this.service = service;
+        this.folders = folders;
     }
 
     @GetMapping
     public List<SavedQuery> search(@RequestParam(required = false) String q, @RequestParam(required = false) String category) {
         return service.search(q, category);
+    }
+
+    public record MoveBody(Long folderId) {
+    }
+
+    /** query id -> folder id for queries filed in a folder; the rest are Unfiled. */
+    @GetMapping("/folders")
+    public java.util.Map<Long, Long> folderAssignments() {
+        return service.folderAssignments();
+    }
+
+    @PutMapping("/{id}/folder")
+    public void move(@PathVariable long id, @RequestBody MoveBody b) {
+        service.moveToFolder(id, folders.requireFolder("QUERY", b.folderId()));
     }
 
     @GetMapping("/categories")

@@ -90,7 +90,7 @@ export default function VariablesTab({ vars, folders, reload, reloadFolders }: {
       <Stack spacing={2} sx={{ flex: 1, minWidth: 0, width: '100%' }}>
         {error && <Alert severity="error">{error}</Alert>}
         <Alert severity="info">
-          Use <code>{'{{name}}'}</code> in any API request, pre-request script, saved query parameter or workflow. Values come from API responses and SQL results (saved
+          Use <code>{'{{name}}'}</code> in any API request, pre-request script, query parameter or workflow. Values come from API responses and SQL results (saved
           automatically by extraction rules) or are created by hand. If the same name exists more than once the most specific wins:
           <b> this run → folder-level → active environment → global</b>. Folders organise variables; a global variable is usable from any folder.
         </Alert>

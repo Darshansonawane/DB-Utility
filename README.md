@@ -1,4 +1,6 @@
-# DB-Utility
+# HelloDB Hub
+
+**Centralized Database Workspace** · *Your Queries. Your Databases. One Workspace.* · A HelloGroup Internal Tool
 
 A local web tool for banking QA: connect to **QA/Staging/Development** MySQL and MongoDB databases (several at once, each protected by its own access password) over your VPN, save SQL once, and run it from generated forms, with previewed and audited writes, multi-step workflows and automatic ID passing.
 
