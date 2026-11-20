@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Button, ToggleButton, ToggleButtonGroup, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Paper,
   Box, Stack, TextField, Typography,
@@ -15,7 +15,8 @@ import { useAsync } from '../hooks/useAsync';
 import { FolderSelect } from './folders/FolderPicker';
 import StepTargetPicker, { type TargetItem } from './workflow/StepTargetPicker';
 import StepTestRun from './workflow/StepTestRun';
-import { reorderSteps } from './workflow/reorder';
+import { insertStep, reorderSteps } from './workflow/reorder';
+import InsertStepButton, { type StepKind } from './workflow/InsertStepButton';
 import { folderPaths } from './folders/folderUtils';
 import type { ApiRequestDef, Folder, ParamMapping, ParamType, Project, QueryResult, SavedQuery, SourceType, Workflow, WorkflowStep } from '../types';
 
@@ -69,13 +70,17 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
   const paths = useMemo(() => folderPaths(folders), [folders]);
   const pickable = allWorkflows.filter((x) => x.id !== w.id && !(w.id != null && contains(x, w.id, allWorkflows)));
 
-  const addStep = (kind: 'QUERY' | 'API_REQUEST' | 'WORKFLOW') => setW((cur) => ({
-    ...cur,
-    steps: [...cur.steps, {
-      order: (cur.steps.at(-1)?.order ?? 0) + 1, name: '', queryId: 0, dependsOn: [], retryCount: 0, retryDelayMs: 500, stopOnFailure: false, outputFields: [], mappings: [],
-      stepType: kind, apiRequestId: null, apiOptions: kind === 'API_REQUEST' ? { ...DEFAULT_OPTIONS } : null, subWorkflowId: null,
-    }],
-  }));
+  const blankStep = (kind: StepKind, order: number): WorkflowStep => ({
+    order, name: '', queryId: 0, dependsOn: [], retryCount: 0, retryDelayMs: 500, stopOnFailure: false, outputFields: [], mappings: [],
+    stepType: kind, apiRequestId: null, apiOptions: kind === 'API_REQUEST' ? { ...DEFAULT_OPTIONS } : null, subWorkflowId: null,
+  });
+  const addStep = (kind: StepKind) => setW((cur) => ({ ...cur, steps: [...cur.steps, blankStep(kind, (cur.steps.at(-1)?.order ?? 0) + 1)] }));
+  /** Adds a step at position `at` (0-based); the steps after it are renumbered and keep their references. */
+  const insertAt = (at: number, kind: StepKind) => {
+    const { steps, renumber } = insertStep(w.steps, at, blankStep(kind, at + 1));
+    setW((cur) => ({ ...cur, steps }));
+    setStepResults((cur) => Object.fromEntries(Object.entries(cur).map(([k, v]) => [renumber.get(Number(k)) ?? Number(k), v])));
+  };
 
   const switchType = (i: number, t: 'QUERY' | 'API_REQUEST' | 'WORKFLOW') => updStep(i, t === 'API_REQUEST'
     ? { stepType: t, queryId: 0, mappings: [], subWorkflowId: null, apiOptions: w.steps[i].apiOptions ?? { ...DEFAULT_OPTIONS } }
@@ -185,7 +190,9 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
 
           <Typography variant="subtitle1" fontWeight={700}>Steps</Typography>
           {w.steps.map((s, i) => (
-            <Paper key={i} variant="outlined" data-testid={`step-${i}`}
+            <Fragment key={i}>
+            <InsertStepButton position={i + 1} onPick={(k) => insertAt(i, k)} />
+            <Paper variant="outlined" data-testid={`step-${i}`}
               onDragOver={(e) => { if (dragFrom !== null) { e.preventDefault(); setDragOver(i); } }}
               onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) moveStep(dragFrom, i); setDragFrom(null); setDragOver(null); }}
               sx={{ p: 2, opacity: dragFrom === i ? 0.5 : 1, borderColor: dragOver === i && dragFrom !== null && dragFrom !== i ? 'primary.main' : undefined, borderWidth: dragOver === i && dragFrom !== null && dragFrom !== i ? 2 : 1 }}>
@@ -262,6 +269,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                 {s.stepType === 'API_REQUEST' && s.apiRequestId && apiRequests.find((r) => r.id === s.apiRequestId) && <StepTestRun key={`a${s.apiRequestId}`} step={s} steps={w.steps} inputs={w.inputs} results={stepResults} onResult={(o, r) => setStepResults((c) => ({ ...c, [o]: r }))} apiRequest={apiRequests.find((r) => r.id === s.apiRequestId)} />}
               </Stack>
             </Paper>
+            </Fragment>
           ))}
           <Stack direction="row" spacing={1}>
             <Button size="small" startIcon={<AddIcon />} onClick={() => addStep('QUERY')}>Add DB query step</Button>

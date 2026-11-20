@@ -118,3 +118,19 @@ describe('reordering workflow steps', () => {
     expect(reorderSteps(steps, 0, 5).steps).toBe(steps);
   });
 });
+
+import { insertStep } from '../components/workflow/reorder';
+describe('inserting a workflow step', () => {
+  it('shifts later steps down and keeps their references', () => {
+    const mk = (order: number, name: string, extra: object = {}) => ({ order, name, dependsOn: [], mappings: [], outputFields: [], ...extra }) as never;
+    const steps = [mk(1, 'A'), mk(2, 'B', { dependsOn: [1], mappings: [{ paramName: 'p', sourceType: 'STEP_OUTPUT', sourceRef: '1', sourceField: 'id' }] })];
+    const { steps: out } = insertStep(steps, 1, mk(0, 'NEW')); // between A and B
+    expect(out.map((s) => `${s.order}:${s.name}`)).toEqual(['1:A', '2:NEW', '3:B']);
+    expect(out[2].dependsOn).toEqual([1]);              // B still depends on A (still step 1)
+    expect(out[2].mappings[0].sourceRef).toBe('1');
+    const atTop = insertStep(steps, 0, mk(0, 'TOP')).steps;
+    expect(atTop.map((s) => `${s.order}:${s.name}`)).toEqual(['1:TOP', '2:A', '3:B']);
+    expect(atTop[2].dependsOn).toEqual([2]);            // A moved to 2, so B's dependency follows
+    expect(atTop[2].mappings[0].sourceRef).toBe('2');
+  });
+});
