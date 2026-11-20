@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Seeds the seven SELECT queries and the Savings Wallet workflow supplied by the QA engineer, once, if absent.
+ * Seeds the seven SELECT queries and the Savings Wallet workflow supplied by the QA engineer, once, into a brand-new metadata store.
+ * It records a marker so that a workflow the user later deletes (or renames) is never recreated on the next start.
  * The SQL is verbatim. Only the output-column aliases (client_unique_id, id) are assumptions; they are editable
  * in Workflow Manager and overridable per run.
  */
@@ -25,15 +26,22 @@ public class SavingsWalletSeeder implements ApplicationRunner {
 
     private final SavedQueryRepository queries;
     private final WorkflowRepository workflows;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private static final String MARKER = "savings-wallet-sample";
 
-    public SavingsWalletSeeder(SavedQueryRepository queries, WorkflowRepository workflows) {
+    public SavingsWalletSeeder(SavedQueryRepository queries, WorkflowRepository workflows, org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.queries = queries;
         this.workflows = workflows;
+        this.jdbc = jdbc;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        if (workflows.findByName(WORKFLOW_NAME).isPresent()) return;
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM seed_marker WHERE name = ?", Long.class, MARKER) > 0) return;
+        // seed only a store with no queries and no workflows; any existing store just gets the marker (it must not bring back what was deleted)
+        boolean fresh = queries.count() == 0 && workflows.count() == 0;
+        jdbc.update("INSERT INTO seed_marker (name) VALUES (?)", MARKER);
+        if (!fresh) return;
         long q1 = query("SW 1 - Fetch savings wallet schedule", "Schedule rows for a customer, newest first. No date filter: the one-month-back filter awaits schema confirmation.",
                 "SELECT sws.*\nFROM bank_wallet.savings_wallet_schedule AS sws\nWHERE customer_id = ?\nORDER BY sws.id DESC", p("customer_id", "Customer ID"));
         long q2 = query("SW 2 - Fetch contributor details", "Contributor details including the client unique ID.",

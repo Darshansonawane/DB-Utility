@@ -341,3 +341,6 @@ ALTER TABLE workflow ADD COLUMN IF NOT EXISTS project_id BIGINT DEFAULT 0 NOT NU
 
 -- Workflow inputs can have an optional default value (used when nothing is provided at run time).
 ALTER TABLE workflow_input ADD COLUMN IF NOT EXISTS default_value VARCHAR(500);
+
+-- One-time seeds that have run (so deleted sample data is not recreated at the next start).
+CREATE TABLE IF NOT EXISTS seed_marker (name VARCHAR(100) PRIMARY KEY);
