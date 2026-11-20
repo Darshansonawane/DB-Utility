@@ -68,7 +68,9 @@ Spring Boot 3 / Java 21          127.0.0.1:8080 only
 
 ## Workflow engine rules
 
-- Step parameters resolve in this order: manual override, mapping (INPUT / STEP_OUTPUT / CONSTANT), default value.
+- Step parameters resolve in this order: **runtime override → automatic value (the mapping: workflow input / earlier step output / constant) → default value → empty if optional**. A step is blocked only when a parameter that is genuinely required has no value anywhere in that chain; an optional value with nothing behind it stays empty (NULL) and the step runs. A required workflow input only blocks the steps that need it, never the whole run. Workflow inputs have an optional default, used when nothing is typed at run time. Run-time values apply to that run only; they change a workflow only when saved explicitly (`PUT /api/workflows/{id}/input-defaults`).
+- **Every step's response is retained automatically** for the run (in memory): database steps keep `{"rowCount": n, "rows": [{column: value, ...}]}`, API steps keep the JSON body. Declaring outputs is optional. A later step reaches any value with a path in a STEP_OUTPUT mapping (`id`, `data.items.0.id`, `rows.1.hr_id`, `rowCount`), or anywhere a `{{variable}}` works with `{{step2.data.wallet.id}}` / `{{step3.rows.0.customer_id}}` (constants, defaults, API URLs/headers/bodies). Inside a nested workflow, `stepN` refers to the nested workflow's own steps.
+- `GET /api/workflows/{id}/run-form` describes, for the optional run-time form, every input and every step parameter: type, required, default and where its value comes from (automatic / workflow input / constant / default / none).
 - STEP_OUTPUT reads a named output alias, or a raw column, from the **first row** of the upstream step.
 - A step with a missing required value, or whose declared dependency did not complete, is `BLOCKED` and not executed. A query that returns zero rows is `NO_DATA` (shown as a missing record), and dependents needing its values are blocked.
 - Re-running a step puts everything downstream of it back to `PENDING` (its outputs may have changed).

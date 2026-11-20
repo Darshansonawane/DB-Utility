@@ -39,7 +39,7 @@ public class WorkflowRepository {
                         rs.getTimestamp("updated_at") == null ? null : rs.getTimestamp("updated_at").toInstant()}, id)
                 .stream().findFirst().map(h -> {
                     List<WorkflowInput> inputs = jdbc.query("SELECT * FROM workflow_input WHERE workflow_id = ? ORDER BY input_order",
-                            (r, i) -> new WorkflowInput(r.getString("name"), r.getString("label"), ParamType.valueOf(r.getString("param_type")), r.getBoolean("required")), id);
+                            (r, i) -> new WorkflowInput(r.getString("name"), r.getString("label"), ParamType.valueOf(r.getString("param_type")), r.getBoolean("required"), r.getString("default_value")), id);
                     List<WorkflowStep> steps = jdbc.query(
                             "SELECT s.*, q.name AS query_name, a.name AS api_name, sw.name AS sub_name FROM workflow_step s LEFT JOIN saved_query q ON q.id = s.query_id LEFT JOIN api_request a ON a.id = s.api_request_id LEFT JOIN workflow sw ON sw.id = s.sub_workflow_id WHERE s.workflow_id = ? ORDER BY s.step_order",
                             (r, i) -> {
@@ -101,6 +101,12 @@ public class WorkflowRepository {
         jdbc.update("UPDATE workflow SET project_id = ?, folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", projectId, folderId, id);
     }
 
+    /** Explicitly saves a default value for one input (null/blank clears it). Nothing else about the workflow changes. */
+    public void setInputDefault(long workflowId, String inputName, String value) {
+        jdbc.update("UPDATE workflow_input SET default_value = ? WHERE workflow_id = ? AND name = ?", value == null || value.isBlank() ? null : value.trim(), workflowId, inputName);
+        jdbc.update("UPDATE workflow SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", workflowId);
+    }
+
     public boolean nameTaken(long projectId, String name, long exceptId) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM workflow WHERE project_id = ? AND name = ? AND id <> ?", Integer.class, projectId, name, exceptId) > 0;
     }
@@ -117,8 +123,8 @@ public class WorkflowRepository {
     private void saveChildren(long wid, Workflow w) {
         int o = 0;
         for (WorkflowInput in : w.inputs()) {
-            jdbc.update("INSERT INTO workflow_input (workflow_id, input_order, name, label, param_type, required) VALUES (?,?,?,?,?,?)",
-                    wid, o++, in.name(), in.label(), in.type().name(), in.required());
+            jdbc.update("INSERT INTO workflow_input (workflow_id, input_order, name, label, param_type, required, default_value) VALUES (?,?,?,?,?,?,?)",
+                    wid, o++, in.name(), in.label(), in.type().name(), in.required(), in.hasDefault() ? in.defaultValue().trim() : null);
         }
         for (WorkflowStep s : w.steps()) {
             KeyHolder kh = new GeneratedKeyHolder();

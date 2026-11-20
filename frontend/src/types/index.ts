@@ -85,7 +85,8 @@ export interface AppSettings {
 }
 
 export type SourceType = 'INPUT' | 'STEP_OUTPUT' | 'CONSTANT';
-export interface WorkflowInput { name: string; label: string; type: ParamType; required: boolean }
+/** defaultValue is optional: used when nothing is provided at run time */
+export interface WorkflowInput { name: string; label: string; type: ParamType; required: boolean; defaultValue?: string | null }
 export interface ParamMapping { paramName: string; sourceType: SourceType; sourceRef?: string; sourceField?: string; constantValue?: string }
 export interface OutputField { alias: string; column: string }
 export interface WorkflowStep {
@@ -179,3 +180,11 @@ export interface PreviewResult { method: string; url: string; headers: Record<st
 export interface ParamPreview { name: string; label: string; type: string; expression: string; resolved: string; status: 'OK' | 'MISSING' | 'EMPTY' | 'MISSING_VARIABLE' | 'INVALID'; message?: string | null; tokens: TokenInfo[] }
 export interface InfoItem { id?: number; folderId: number; title: string; content: string; createdAt?: string; updatedAt?: string }
 export interface InfoSummary { id: number; folderId: number; title: string; snippet: string; updatedAt?: string }
+
+/** What the Run dialog shows before anything runs: inputs with defaults, and each step's parameters with where their value comes from. */
+export interface RunFormParam {
+  name: string; label: string; type: ParamType; required: boolean; defaultValue?: string | null;
+  sourceKind: 'AUTOMATIC' | 'WORKFLOW_INPUT' | 'CONSTANT' | 'DEFAULT' | 'NONE'; source: string; constant?: string | null; inputRef?: string | null;
+}
+export interface RunFormStep { order: number; name: string; stepType: string; params: RunFormParam[] }
+export interface RunForm { inputs: { name: string; label: string; type: ParamType; required: boolean; defaultValue?: string | null }[]; steps: RunFormStep[] }

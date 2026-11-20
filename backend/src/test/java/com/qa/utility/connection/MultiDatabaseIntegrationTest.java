@@ -581,4 +581,82 @@ class MultiDatabaseIntegrationTest {
             dropFixture();
         }
     }
+
+    // ------------------------------------------------------------------ runtime inputs and flexible variables on the real databases
+
+    @Test
+    void automaticOverrideDefaultAndEmptyValuesWorkTogetherOnRealMySql() throws Exception {
+        fixture();
+        try {
+            SessionContext.set("s-" + u);
+            connections.connect(mysqlAs("rt-mysql-", MYSQL_USER, MYSQL_PW).id(), ACCESS);
+            connections.useDatabase("bank_wallet", DbType.MYSQL);
+
+            SavedQuery fetch = sqlQuery("rtfetch-", QueryType.READ, "SELECT id, scheduled_date FROM " + table + " WHERE customer_id = ? ORDER BY id DESC", p("customer_id", ParamType.STRING));
+            SavedQuery update = sqlQuery("rtupd-", QueryType.WRITE, "UPDATE " + table + " SET scheduled_date = ?, status = ? WHERE id = ?",
+                    p("d", ParamType.DATE), new QueryParameter("status", "Status", ParamType.STRING, false, "FROM_QUERY_DEFAULT"), p("id", ParamType.INTEGER));
+            SavedQuery insert = sqlQuery("rtins-", QueryType.WRITE, "INSERT INTO " + table + " (id, customer_id, scheduled_date, status) VALUES (?, ?, ?, ?)",
+                    p("id", ParamType.INTEGER), p("customer", ParamType.STRING), p("d", ParamType.DATE), new QueryParameter("status", "Status", ParamType.STRING, false, null));
+            Workflow w = workflows.create(new Workflow(null, "rt-real-" + u, null,
+                    List.of(new WorkflowInput("customerId", "Customer", ParamType.STRING, true, "C100"), new WorkflowInput("newDate", "New date", ParamType.DATE, false)),
+                    List.of(
+                            step(1, "fetch (no outputs declared)", fetch, List.of(), List.of(), new ParamMapping("customer_id", SourceType.INPUT, "customerId", null, null)),
+                            step(2, "update the second newest row", update, List.of(1), List.of(), new ParamMapping("d", SourceType.CONSTANT, null, null, "2026-11-01"),
+                                    new ParamMapping("id", SourceType.STEP_OUTPUT, "1", "rows.1.id", null)),
+                            step(3, "insert with an optional empty status", insert, List.of(2), List.of(), new ParamMapping("id", SourceType.CONSTANT, null, null, "60"),
+                                    new ParamMapping("customer", SourceType.INPUT, "customerId", null, null), new ParamMapping("d", SourceType.INPUT, "newDate", null, null)))));
+
+            // 1) nothing typed: the workflow input default (C100) is used, the second-newest row comes from the retained result, the optional status is the query default,
+            //    and the date input is empty -> step 3 needs it (required parameter) so it is genuinely blocked, step 2 still ran
+            RunView first = executor.runNow(w.id(), Map.of(), Map.of(), List.of());
+            assertEquals("C100", first.inputs().get("customerId"));
+            assertEquals("2", first.steps().get(1).params().get("id"), "rows.1.id: the second row of step 1's retained result");
+            assertEquals("SUCCESS", first.steps().get(1).status());
+            assertEquals("FROM_QUERY_DEFAULT", scalar("SELECT status FROM " + table + " WHERE id = 2"));
+            assertEquals("BLOCKED", first.steps().get(2).status(), "a required value that really is missing blocks only that step");
+            assertNull(scalar("SELECT id FROM " + table + " WHERE id = 60"));
+
+            // 2) runtime inputs: a date for the workflow input, a runtime override of one step parameter for this run only
+            RunView second = executor.runNow(w.id(), Map.of("newDate", "2031-05-05"), Map.of(2, Map.of("status", "OVERRIDDEN")), List.of());
+            assertEquals("SUCCESS", second.status(), second.steps().toString());
+            assertEquals("OVERRIDDEN", scalar("SELECT status FROM " + table + " WHERE id = 2"), "runtime override beat the default");
+            assertEquals("2031-05-05", scalar("SELECT scheduled_date FROM " + table + " WHERE id = 60"), "the typed date reached the INSERT");
+            assertNull(scalar("SELECT status FROM " + table + " WHERE id = 60"), "the optional, unmapped, default-less status was stored as NULL, not blocked");
+            assertEquals("1", scalar("SELECT COUNT(*) FROM " + table + " WHERE id = 60 AND status IS NULL"));
+
+            // 3) the override was for one run only: running again without it uses the default again
+            try (Connection c = direct(); Statement st = c.createStatement()) {
+                st.execute("DELETE FROM " + table + " WHERE id = 60");
+            }
+            RunView third = executor.runNow(w.id(), Map.of("newDate", "2031-06-06"), Map.of(), List.of());
+            assertEquals("SUCCESS", third.status(), third.steps().toString());
+            assertEquals("FROM_QUERY_DEFAULT", scalar("SELECT status FROM " + table + " WHERE id = 2"));
+            assertEquals("2031-06-06", scalar("SELECT scheduled_date FROM " + table + " WHERE id = 60"));
+        } finally {
+            dropFixture();
+        }
+    }
+
+    @Test
+    void aMongoStepsRetainedResponseFeedsAMySqlStepWithoutAnyOutputDefinition() {
+        SessionContext.set("s-" + u);
+        connections.connect(mongoUri("rt-mongo-", "QA").id(), ACCESS);
+        connections.useDatabase("qa_customers", DbType.MONGODB);
+        connections.connect(mysql("rt-my-").id(), ACCESS);
+        connections.useDatabase("bank_wallet", DbType.MYSQL);
+        SavedQuery fromMongo = mongoQuery("rt-m-", "{\"collection\":\"customers\",\"filter\":{\"customerId\":\"?\"}}", p("customerId", ParamType.STRING));
+        SavedQuery inMysql = sqlQuery("rt-s-", QueryType.READ, "SELECT name, ? AS tag FROM bank_wallet.customers WHERE customer_id = ?", p("tag", ParamType.STRING), p("customer_id", ParamType.STRING));
+        Workflow w = workflows.create(new Workflow(null, "rt-cross-" + u, null, List.of(new WorkflowInput("customer", "Customer", ParamType.STRING, false, "C200")), List.of(
+                step(1, "mongo customer", fromMongo, List.of(), List.of(), new ParamMapping("customerId", SourceType.INPUT, "customer", null, null)),
+                step(2, "mysql customer by the mongo document's customerId", inMysql, List.of(1), List.of(),
+                        new ParamMapping("customer_id", SourceType.STEP_OUTPUT, "1", "rows.0.customerId", null),
+                        new ParamMapping("tag", SourceType.CONSTANT, null, null, "{{step1.rows.0.address}} / {{step1.rows.0.name}}")))));
+        RunView run = executor.runNow(w.id(), Map.of(), Map.of(), List.of());
+        assertEquals("SUCCESS", run.status(), run.steps().toString());
+        assertEquals("C200", run.steps().get(1).params().get("customer_id"), "the default input C200 flowed Mongo -> MySQL");
+        assertEquals("Ravi", run.steps().get(1).result().rows().get(0).get(0));
+        assertEquals("{\"city\": \"Mumbai\"} / Ravi", run.steps().get(1).result().rows().get(0).get(1), "{{stepN.path}} read the retained Mongo document");
+        RunView typed = executor.runNow(w.id(), Map.of("customer", "C100"), Map.of(), List.of());
+        assertEquals("Asha", typed.steps().get(1).result().rows().get(0).get(0), "a runtime value beats the input default");
+    }
 }

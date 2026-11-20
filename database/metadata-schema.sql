@@ -336,3 +336,6 @@ CREATE TABLE IF NOT EXISTS project (
 );
 ALTER TABLE folder ADD COLUMN IF NOT EXISTS project_id BIGINT DEFAULT 0 NOT NULL;
 ALTER TABLE workflow ADD COLUMN IF NOT EXISTS project_id BIGINT DEFAULT 0 NOT NULL;
+
+-- Workflow inputs can have an optional default value (used when nothing is provided at run time).
+ALTER TABLE workflow_input ADD COLUMN IF NOT EXISTS default_value VARCHAR(500);

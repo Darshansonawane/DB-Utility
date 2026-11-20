@@ -48,6 +48,8 @@ public class WorkflowExecutor {
         final Map<String, String> inputs;
         final Map<Integer, StepRunView> steps = new ConcurrentHashMap<>();
         final Map<Integer, Map<String, Object>> firstRows = new ConcurrentHashMap<>();
+        /** The full response of each step, kept in memory for this run: {"rowCount","rows":[...]} for database steps, the JSON body for API steps. */
+        final Map<Integer, com.fasterxml.jackson.databind.JsonNode> docs = new ConcurrentHashMap<>();
         final Map<Integer, Map<String, String>> overrides = new ConcurrentHashMap<>();
         final AtomicBoolean running = new AtomicBoolean(false);
         final Instant started = Instant.now();
@@ -167,10 +169,14 @@ public class WorkflowExecutor {
             if (v != null && !v.isBlank()) {
                 wi.type().convert(v, wi.label()); // validate type
                 in.put(wi.name(), v.trim());
+            } else if (wi.hasDefault()) { // nothing given at run time: the optional default
+                wi.type().convert(wi.defaultValue(), wi.label());
+                in.put(wi.name(), wi.defaultValue().trim());
             }
         }
         RunContext ctx = new RunContext(w, in, conn, null);
         in.forEach((k, v) -> ctx.scope.set(k, v, false)); // workflow inputs are usable as {{name}} in API steps and query values
+        installStepReferences(ctx);
         store.put(ctx.runId, ctx);
         return ctx;
     }
@@ -320,16 +326,20 @@ public class WorkflowExecutor {
                 continue;
             }
             Optional<ParamMapping> mapping = st.mappings().stream().filter(m -> m.paramName().equals(p.name())).findFirst();
+            boolean hasDefault = p.defaultValue() != null && !p.defaultValue().isBlank();
             if (mapping.isPresent()) {
                 Resolved r = resolve(ctx, mapping.get());
                 if (r.value != null) {
                     params.put(p.name(), r.value);
                     sources.put(p.name(), r.source);
+                } else if (hasDefault) { // the automatic value is not available: fall back to the default
+                    params.put(p.name(), p.defaultValue());
+                    sources.put(p.name(), "Default value (" + r.source + " not available)");
                 } else {
-                    sources.put(p.name(), r.source);
-                    missing.add(p.label() + ": " + r.problem);
+                    sources.put(p.name(), r.source + " (empty)");
+                    if (p.required()) missing.add(p.label() + ": " + r.problem); // an optional value that is not there simply stays empty
                 }
-            } else if (p.defaultValue() != null && !p.defaultValue().isBlank()) {
+            } else if (hasDefault) {
                 params.put(p.name(), p.defaultValue());
                 sources.put(p.name(), "Default value");
             } else if (p.required()) {
@@ -377,6 +387,7 @@ public class WorkflowExecutor {
         }
         Map<String, Object> first = res.firstRow();
         ctx.firstRows.put(st.order(), first);
+        ctx.docs.put(st.order(), resultDoc(res)); // the full response is always kept: later steps can reach any row or column
         QueryLibraryService.ExtractionOutcome extractedVars = library.applyExtractions(q, res, ctx.scope);
         if (!extractedVars.values().isEmpty()) res = res.withExtracted(extractedVars.values());
         Map<String, Object> outputs = new LinkedHashMap<>();
@@ -440,7 +451,11 @@ public class WorkflowExecutor {
                 Resolved r = resolve(ctx, mapping.get());
                 sources.put(wi.name(), r.source);
                 if (r.value != null) inputs.put(wi.name(), r.value);
+                else if (wi.hasDefault()) { inputs.put(wi.name(), wi.defaultValue().trim()); sources.put(wi.name(), "Default value (" + r.source + " not available)"); }
                 else if (wi.required()) missing.add(wi.label() + ": " + r.problem);
+            } else if (wi.hasDefault()) {
+                inputs.put(wi.name(), wi.defaultValue().trim());
+                sources.put(wi.name(), "Default value");
             } else if (wi.required()) {
                 missing.add(wi.label() + ": no mapping configured");
             }
@@ -459,7 +474,13 @@ public class WorkflowExecutor {
         RunContext cc = new RunContext(child, inputs, ctx.connection, ctx);
         store.put(cc.runId, cc);
         cc.running.set(true);
-        runSteps(cc, child.steps().stream().map(WorkflowStep::order).collect(Collectors.toCollection(TreeSet::new)));
+        var parentResolver = cc.scope.stepResolver();
+        installStepReferences(cc);
+        try {
+            runSteps(cc, child.steps().stream().map(WorkflowStep::order).collect(Collectors.toCollection(TreeSet::new)));
+        } finally {
+            cc.scope.setStepResolver(parentResolver); // the scope is shared with the parent: {{stepN...}} refers to the parent's steps again
+        }
         RunView childView = view(cc);
         List<StepRunView> kids = childView.steps();
         Map<String, Object> outputs = new LinkedHashMap<>();
@@ -495,6 +516,7 @@ public class WorkflowExecutor {
         ApiStepRunner.Outcome o = apiSteps.run(req, st.apiOptions(), ctx.scope, RunControl.of(() -> stopped(ctx)), txt -> { });
         long ms = Duration.ofNanos(System.nanoTime() - t0).toMillis();
         Integer http = o.last() == null ? null : o.last().status();
+        if (o.last() != null && o.last().body() != null) ctx.docs.put(st.order(), bodyDoc(o.last().body()));
         if (!o.success()) {
             return new StepRunView(st.order(), st.name(), st.description(), label, o.cancelled() ? "STOPPED" : "FAILED", ms, o.attempts(),
                     Map.of(), Map.of(), null, Map.of(), null, http == null ? null : "HTTP " + http, o.error());
@@ -521,6 +543,65 @@ public class WorkflowExecutor {
         return new StepRunView(st.order(), st.name(), st.description(), label, "SUCCESS", ms, o.attempts(), Map.of(), Map.of(), res, outputs, null, message, null);
     }
 
+    // ------------------------------------------------------------------ retained responses
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** {"rowCount": n, "rows": [{column: value, ...}, ...]} (a write: {"rowsAffected": n}). */
+    private static com.fasterxml.jackson.databind.JsonNode resultDoc(QueryResult res) {
+        var doc = MAPPER.createObjectNode();
+        if (res.affectedRows() != null && res.columns().isEmpty()) {
+            doc.put("rowsAffected", res.affectedRows());
+            return doc;
+        }
+        doc.put("rowCount", res.rowCount());
+        var rows = doc.putArray("rows");
+        for (List<Object> r : res.rows()) {
+            var o = rows.addObject();
+            for (int i = 0; i < res.columns().size() && i < r.size(); i++) o.set(res.columns().get(i).name(), MAPPER.valueToTree(r.get(i)));
+        }
+        return doc;
+    }
+
+    /** The JSON response as it is; anything else is kept as {"body": "<text>"}. */
+    private static com.fasterxml.jackson.databind.JsonNode bodyDoc(String body) {
+        try {
+            var n = MAPPER.readTree(body);
+            if (n != null && !n.isMissingNode()) return n;
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+            // not JSON
+        }
+        return MAPPER.createObjectNode().put("body", body);
+    }
+
+    /** A value of a finished step: a declared output alias, a first-row column, or a path into its retained response. */
+    private Object lookupOutput(RunContext ctx, int step, String field) {
+        StepRunView sv = ctx.steps.get(step);
+        if (sv == null) return null;
+        Object val = sv.outputs().get(field);
+        if (val == null) val = ctx.firstRows.getOrDefault(step, Map.of()).get(field);
+        if (val == null) {
+            var n = StepPaths.path(ctx.docs.get(step), field);
+            if (n != null) val = StepPaths.text(n);
+        }
+        return val;
+    }
+
+    private static final java.util.regex.Pattern STEP_REF = java.util.regex.Pattern.compile("^step(\\d+)\\.(.+)$", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** {{step2.data.id}} / {{step3.rows.0.customer_id}}: any earlier finished step's value, by path, with no output definition needed. */
+    private void installStepReferences(RunContext ctx) {
+        ctx.scope.setStepResolver(name -> {
+            var m = STEP_REF.matcher(name);
+            if (!m.matches()) return null;
+            int step = Integer.parseInt(m.group(1));
+            StepRunView sv = ctx.steps.get(step);
+            if (sv == null || !DONE.contains(sv.status())) return null;
+            Object v = lookupOutput(ctx, step, m.group(2));
+            return v == null ? null : String.valueOf(v);
+        });
+    }
+
     private record Resolved(String value, String source, String problem) {
     }
 
@@ -540,14 +621,13 @@ public class WorkflowExecutor {
                 if (uv == null) return new Resolved(null, src, "step " + up + " has not run");
                 if ("NO_DATA".equals(uv.status())) return new Resolved(null, src, "step " + up + " returned no records");
                 if (!DONE.contains(uv.status())) return new Resolved(null, src, "step " + up + " is " + uv.status());
-                Object val = uv.outputs().get(m.sourceField());
+                Object val = lookupOutput(ctx, up, m.sourceField());
                 Map<String, Object> row = ctx.firstRows.getOrDefault(up, Map.of());
-                if (val == null) val = row.get(m.sourceField());
                 if (val == null) {
                     boolean exists = uv.outputs().containsKey(m.sourceField()) || row.containsKey(m.sourceField());
                     return new Resolved(null, src, exists ? "step " + up + " field '" + m.sourceField() + "' is empty (NULL)"
                             : "step " + up + " has no field '" + m.sourceField() + "' (available: " + String.join(", ", row.keySet())
-                            + "). Fix the output mapping in Workflow Manager or enter the value manually");
+                            + ", or a path into the response such as data.items.0.id). Fix the mapping in Workflow Manager or enter the value manually");
                 }
                 return new Resolved(String.valueOf(val), src, null);
             }

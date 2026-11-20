@@ -108,6 +108,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
           </Stack>
 
           <Typography variant="subtitle1" fontWeight={700}>Workflow inputs</Typography>
+          <Typography variant="caption" color="text.secondary">Optional. They appear as an optional form when you run the workflow. A default is used when nothing is typed; a required input only blocks the steps that actually need it.</Typography>
           {w.inputs.map((inp, i) => (
             <Stack key={i} direction="row" spacing={1} alignItems="center">
               <TextField size="small" label="Name (id)" value={inp.name} onChange={(e) => setW({ ...w, inputs: w.inputs.map((x, k) => (k === i ? { ...x, name: e.target.value } : x)) })} />
@@ -115,6 +116,8 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
               <TextField size="small" select label="Type" value={inp.type} sx={{ minWidth: 130 }} onChange={(e) => setW({ ...w, inputs: w.inputs.map((x, k) => (k === i ? { ...x, type: e.target.value as ParamType } : x)) })}>
                 {TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
               </TextField>
+              <TextField size="small" label="Default (optional)" value={inp.defaultValue ?? ''} sx={{ minWidth: 150 }} placeholder={inp.type === 'BOOLEAN' ? 'true / false' : inp.type === 'DATE' ? 'YYYY-MM-DD' : ''}
+                onChange={(e) => setW({ ...w, inputs: w.inputs.map((x, k) => (k === i ? { ...x, defaultValue: e.target.value } : x)) })} />
               <FormControlLabel label="Required" control={<Checkbox checked={inp.required} onChange={(e) => setW({ ...w, inputs: w.inputs.map((x, k) => (k === i ? { ...x, required: e.target.checked } : x)) })} />} />
               <IconButton aria-label="remove input" onClick={() => setW({ ...w, inputs: w.inputs.filter((_, k) => k !== i) })}><DeleteIcon fontSize="small" /></IconButton>
             </Stack>
@@ -151,7 +154,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                 </Stack>
                 <Stack direction="row" spacing={1}>
                   <TextField size="small" label="Depends on (step orders, comma separated)" value={s.dependsOn.join(',')} onChange={(e) => updStep(i, { dependsOn: e.target.value.split(',').map((x) => parseInt(x.trim(), 10)).filter((x) => !Number.isNaN(x)) })} />
-                  {s.stepType === 'WORKFLOW' ? <Typography variant="caption" color="text.secondary" sx={{ flex: 1, alignSelf: 'center' }}>All outputs of the nested workflow's steps become this step's outputs.</Typography> : <TextField size="small" label="Output fields (alias=COLUMN, ...)" fullWidth value={s.outputFields.map((o) => `${o.alias}=${o.column}`).join(', ')}
+                  {s.stepType === 'WORKFLOW' ? <Typography variant="caption" color="text.secondary" sx={{ flex: 1, alignSelf: 'center' }}>All outputs of the nested workflow's steps become this step's outputs.</Typography> : <TextField size="small" label="Output fields (optional: alias=COLUMN, ...)" fullWidth value={s.outputFields.map((o) => `${o.alias}=${o.column}`).join(', ')}
                     onChange={(e) => updStep(i, { outputFields: e.target.value.split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const [a, c] = x.split('='); return { alias: (a ?? '').trim(), column: (c ?? a ?? '').trim() }; }) })} />}
                   {s.stepType !== 'API_REQUEST' && s.stepType !== 'WORKFLOW' && <TextField size="small" type="number" label="Retries" sx={{ width: 90 }} value={s.retryCount} onChange={(e) => updStep(i, { retryCount: Number(e.target.value) })} />}
                   <FormControlLabel label="Stop on failure" control={<Checkbox checked={s.stopOnFailure} onChange={(e) => updStep(i, { stopOnFailure: e.target.checked })} />} />
@@ -176,7 +179,7 @@ export default function WorkflowEditDialog({ open, initial, folders, projects = 
                     {m.sourceType === 'STEP_OUTPUT' && (
                       <>
                         <TextField size="small" label="Step order" sx={{ width: 110 }} value={m.sourceRef ?? ''} onChange={(e) => updMap(i, mi, { sourceRef: e.target.value })} />
-                        <TextField size="small" label="Output alias or column" sx={{ minWidth: 210 }} value={m.sourceField ?? ''} onChange={(e) => updMap(i, mi, { sourceField: e.target.value })} />
+                        <TextField size="small" label="Output alias, column or response path" sx={{ minWidth: 260 }} placeholder="id  /  data.items.0.id  /  rows.1.id" value={m.sourceField ?? ''} onChange={(e) => updMap(i, mi, { sourceField: e.target.value })} />
                       </>
                     )}
                     {m.sourceType === 'CONSTANT' && <TextField size="small" label="Value" value={m.constantValue ?? ''} onChange={(e) => updMap(i, mi, { constantValue: e.target.value })} />}

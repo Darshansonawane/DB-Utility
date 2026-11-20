@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type {
-  AppSettings, DbType, Project, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
+  AppSettings, DbType, Project, RunForm, ConnectionRequest, ConnectionView, Dashboard, ParamValue, QueryResult, RunView, SavedQuery,
   SqlAnalysis, StatusView, ApiRequestDef, ApiRunResult, ApiWorkflowDef, ApiRunView, Folder, FolderKind, VariableBody, PreviewResult, ParamPreview, InfoItem, InfoSummary, RunSummary, WorkflowReport, OverviewRow, VariableView, DatabaseList, TestResult, Workflow, WritePreview,
 } from '../types';
 
@@ -128,6 +128,8 @@ export const api = {
   executeOnRun: (runId: string, steps: number[], overrides: Record<number, Record<string, string>>) =>
     d<RunView>(http.post(`/workflow-runs/${runId}/execute`, { steps, overrides })),
   stopRun: (runId: string) => d<RunView>(http.post(`/workflow-runs/${runId}/stop`)),
+  workflowRunForm: (id: number) => d<RunForm>(http.get(`/workflows/${id}/run-form`)),
+  saveInputDefaults: (id: number, defaults: Record<string, string>) => d<void>(http.put(`/workflows/${id}/input-defaults`, { defaults })),
 
   executions: (status?: string) => d<Record<string, unknown>[]>(http.get('/history/executions', { params: { status, limit: 200 } })),
   workflowRuns: (customerId?: string) => d<Record<string, unknown>[]>(http.get('/history/workflow-runs', { params: { customerId, limit: 200 } })),

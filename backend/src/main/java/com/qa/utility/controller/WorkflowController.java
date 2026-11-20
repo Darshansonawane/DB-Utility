@@ -50,6 +50,18 @@ public class WorkflowController {
         service.delete(id);
     }
 
+    /** Inputs with defaults and every step's parameters with their sources: the data behind the optional run-time input form. */
+    @GetMapping("/workflows/{id}/run-form")
+    public RunForm runForm(@PathVariable long id) {
+        return service.runForm(id);
+    }
+
+    /** Explicitly saves defaults for workflow inputs (run-time overrides are otherwise for one run only). */
+    @PutMapping("/workflows/{id}/input-defaults")
+    public void saveInputDefaults(@PathVariable long id, @RequestBody InputDefaults b) {
+        service.saveInputDefaults(id, b.defaults());
+    }
+
     @PostMapping("/workflows/{id}/runs")
     public RunView start(@PathVariable long id, @RequestBody StartRunRequest r) {
         return executor.start(id, r.inputs(), r.overrides(), r.steps());

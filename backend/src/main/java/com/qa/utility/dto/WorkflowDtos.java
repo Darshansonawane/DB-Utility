@@ -14,6 +14,23 @@ public final class WorkflowDtos {
     public record MoveWorkflow(Long folderId, Long projectId) {
     }
 
+    /** What the Run dialog needs: workflow inputs with defaults, and for every step its parameters, where each value comes from and its default. */
+    public record RunForm(List<RunInput> inputs, List<RunStep> steps) {
+    }
+
+    public record RunInput(String name, String label, String type, boolean required, String defaultValue) {
+    }
+
+    public record RunStep(int order, String name, String stepType, List<RunParam> params) {
+    }
+
+    /** {@code sourceKind}: AUTOMATIC (earlier step output), WORKFLOW_INPUT, CONSTANT, DEFAULT (no mapping, has a default) or NONE (nothing provides it). */
+    public record RunParam(String name, String label, String type, boolean required, String defaultValue, String sourceKind, String source, String constant, String inputRef) {
+    }
+
+    public record InputDefaults(Map<String, String> defaults) {
+    }
+
     public record StartRunRequest(Map<String, String> inputs, Map<Integer, Map<String, String>> overrides, List<Integer> steps) {
     }
 

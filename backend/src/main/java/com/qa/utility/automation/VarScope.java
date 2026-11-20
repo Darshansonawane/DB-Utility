@@ -29,7 +29,22 @@ public final class VarScope {
     }
 
     public Entry get(String name) {
-        return local.get(name);
+        Entry e = local.get(name);
+        if (e != null) return e;
+        java.util.function.Function<String, String> r = stepResolver;
+        String v = r == null ? null : r.apply(name);
+        return v == null ? null : new Entry(v, false);
+    }
+
+    private volatile java.util.function.Function<String, String> stepResolver;
+
+    /** Lets {{step2.data.id}} read the retained response of an earlier step of the workflow that owns this scope. */
+    public void setStepResolver(java.util.function.Function<String, String> resolver) {
+        this.stepResolver = resolver;
+    }
+
+    public java.util.function.Function<String, String> stepResolver() {
+        return stepResolver;
     }
 
     /** Folders of the workflow this scope belongs to (nearest first). */

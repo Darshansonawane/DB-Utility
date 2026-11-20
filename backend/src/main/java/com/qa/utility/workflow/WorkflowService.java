@@ -97,6 +97,61 @@ public class WorkflowService {
     }
 
     /** Every workflow belongs to a project: the one given, else its folder's project, else (on update) the current one, else the default project. */
+    /** What the Run dialog shows: inputs with defaults, and each step's parameters with where their value comes from. */
+    public com.qa.utility.dto.WorkflowDtos.RunForm runForm(long id) {
+        Workflow w = get(id);
+        List<com.qa.utility.dto.WorkflowDtos.RunInput> inputs = w.inputs().stream()
+                .map(i -> new com.qa.utility.dto.WorkflowDtos.RunInput(i.name(), i.label(), i.type().name(), i.required(), i.defaultValue())).toList();
+        List<com.qa.utility.dto.WorkflowDtos.RunStep> steps = new ArrayList<>();
+        for (WorkflowStep st : w.steps()) {
+            List<com.qa.utility.dto.WorkflowDtos.RunParam> params = new ArrayList<>();
+            if (st.isWorkflow() && st.subWorkflowId() != null) {
+                Workflow child = repo.findById(st.subWorkflowId()).orElse(null);
+                if (child != null) for (WorkflowInput ci : child.inputs()) params.add(runParam(st, ci.name(), ci.label(), ci.type().name(), ci.required(), ci.defaultValue()));
+            } else if (!st.isApi()) {
+                SavedQuery q = queries.findById(st.queryId()).orElse(null);
+                if (q != null) for (QueryParameter p : q.parameters()) params.add(runParam(st, p.name(), p.label(), p.type().name(), p.required(), p.defaultValue()));
+            }
+            steps.add(new com.qa.utility.dto.WorkflowDtos.RunStep(st.order(), st.name(), st.stepType(), params));
+        }
+        return new com.qa.utility.dto.WorkflowDtos.RunForm(inputs, steps);
+    }
+
+    private static com.qa.utility.dto.WorkflowDtos.RunParam runParam(WorkflowStep st, String name, String label, String type, boolean required, String def) {
+        ParamMapping m = st.mappings().stream().filter(x -> x.paramName().equals(name)).findFirst().orElse(null);
+        boolean hasDefault = def != null && !def.isBlank();
+        String kind;
+        String source;
+        if (m == null) {
+            kind = hasDefault ? "DEFAULT" : "NONE";
+            source = hasDefault ? "Default value" : "Not provided";
+        } else if (m.sourceType() == SourceType.STEP_OUTPUT) {
+            kind = "AUTOMATIC";
+            source = "Step " + m.sourceRef() + " -> " + m.sourceField();
+        } else if (m.sourceType() == SourceType.INPUT) {
+            kind = "WORKFLOW_INPUT";
+            source = "Workflow input '" + m.sourceRef() + "'";
+        } else {
+            kind = "CONSTANT";
+            source = "Constant";
+        }
+        return new com.qa.utility.dto.WorkflowDtos.RunParam(name, label, type, required, hasDefault ? def : null, kind, source,
+                m != null && m.sourceType() == SourceType.CONSTANT ? m.constantValue() : null, m != null && m.sourceType() == SourceType.INPUT ? m.sourceRef() : null);
+    }
+
+    /** Explicitly saves default values for workflow inputs. Run-time values never change a workflow unless they are saved here. */
+    public void saveInputDefaults(long id, Map<String, String> defaults) {
+        Workflow w = get(id);
+        if (defaults == null) return;
+        for (Map.Entry<String, String> e : defaults.entrySet()) {
+            WorkflowInput in = w.inputs().stream().filter(i -> i.name().equals(e.getKey())).findFirst()
+                    .orElseThrow(() -> ApiException.badRequest("Unknown workflow input '" + e.getKey() + "'"));
+            if (e.getValue() != null && !e.getValue().isBlank()) in.type().convert(e.getValue(), in.label());
+            repo.setInputDefault(id, in.name(), e.getValue());
+        }
+        audit.record("WORKFLOW_DEFAULTS_SAVED", null, null, null, null, "SUCCESS", w.name());
+    }
+
     private Workflow normalised(Workflow w, Workflow existing) {
         Long requested = w.projectId() == null || w.projectId() == 0 ? null : w.projectId();
         long project;
@@ -128,7 +183,10 @@ public class WorkflowService {
     /** Steps must reference real queries and parameters; dependencies and step-output mappings must point backwards (no cycles). */
     void validate(Workflow w, Long selfId) {
         Set<String> inputNames = new HashSet<>();
-        for (WorkflowInput in : w.inputs()) if (!inputNames.add(in.name())) throw ApiException.badRequest("Duplicate workflow input '" + in.name() + "'");
+        for (WorkflowInput in : w.inputs()) {
+            if (!inputNames.add(in.name())) throw ApiException.badRequest("Duplicate workflow input '" + in.name() + "'");
+            if (in.hasDefault()) in.type().convert(in.defaultValue(), in.label()); // a default must be a valid value of the input's type
+        }
         Set<Integer> orders = new HashSet<>();
         Map<Integer, WorkflowStep> byOrder = new HashMap<>();
         for (WorkflowStep s : w.steps()) {

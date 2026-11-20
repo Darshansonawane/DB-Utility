@@ -40,11 +40,20 @@ public record Workflow(
         steps = steps == null ? List.of() : steps;
     }
 
+    /** {@code defaultValue} is optional: used when no value is given at run time. */
     public record WorkflowInput(
             @NotBlank @Pattern(regexp = "^[A-Za-z][A-Za-z0-9_]{0,99}$") String name,
             @NotBlank String label,
             @NotNull ParamType type,
-            boolean required) {
+            boolean required,
+            @Size(max = 500) String defaultValue) {
+        public WorkflowInput(String name, String label, ParamType type, boolean required) {
+            this(name, label, type, required, null);
+        }
+
+        public boolean hasDefault() {
+            return defaultValue != null && !defaultValue.isBlank();
+        }
     }
 
     public enum SourceType { INPUT, STEP_OUTPUT, CONSTANT }

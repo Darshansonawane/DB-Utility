@@ -2,11 +2,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import WorkflowRunner from '../components/WorkflowRunner';
 import { api } from '../services/api';
-import type { RunView, Workflow } from '../types';
+import type { RunForm, RunView, Workflow } from '../types';
 
 vi.mock('../services/api', async (orig) => {
   const actual = await orig<typeof import('../services/api')>();
-  return { ...actual, api: { startRun: vi.fn(), executeOnRun: vi.fn(), getRun: vi.fn(), stopRun: vi.fn() } };
+  return { ...actual, api: { startRun: vi.fn(), executeOnRun: vi.fn(), getRun: vi.fn(), stopRun: vi.fn(), workflowRunForm: vi.fn(), saveInputDefaults: vi.fn() } };
 });
 
 const wf: Workflow = {
@@ -32,13 +32,17 @@ const run = (overrides: Partial<RunView> = {}): RunView => ({
 });
 
 describe('WorkflowRunner', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.workflowRunForm).mockResolvedValue({ inputs: [], steps: [] }); });
 
-  it('requires the initial inputs before running', async () => {
+  it('does not refuse to run when required inputs are empty: it only says which steps will be blocked', async () => {
+    vi.mocked(api.startRun).mockResolvedValue(run({ status: 'PARTIAL' }));
     render(<WorkflowRunner workflow={wf} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch All Details' }));
-    expect(await screen.findByText(/Required: Customer ID, Contributor ID/)).toBeInTheDocument();
-    expect(api.startRun).not.toHaveBeenCalled();
+    expect(screen.getByText(/No value for required inputs: Customer ID, Contributor ID/)).toBeInTheDocument();
+    expect(screen.getByText(/only the steps that need them are blocked/)).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Run workflow' });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    await waitFor(() => expect(api.startRun).toHaveBeenCalledWith(1, {}, {}, []));
   });
 
   it('starts a run with the entered inputs and shows mapped values passed between steps', async () => {
@@ -46,7 +50,7 @@ describe('WorkflowRunner', () => {
     render(<WorkflowRunner workflow={wf} />);
     await userEvent.type(screen.getByTestId('field-customerId'), 'C1');
     await userEvent.type(screen.getByTestId('field-contributorId'), 'CT7');
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch All Details' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
     await waitFor(() => expect(api.startRun).toHaveBeenCalledWith(1, { customerId: 'C1', contributorId: 'CT7' }, {}, []));
     expect(await screen.findByDisplayValue('CLIENT-A')).toBeInTheDocument(); // step 3 input populated from step 2
     expect(screen.getByText('Step 2 -> clientUniqueId')).toBeInTheDocument();
@@ -64,7 +68,7 @@ describe('WorkflowRunner', () => {
     render(<WorkflowRunner workflow={wf} />);
     await userEvent.type(screen.getByTestId('field-customerId'), 'C1');
     await userEvent.type(screen.getByTestId('field-contributorId'), 'X');
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch All Details' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
     expect(await screen.findByText('No records found for the given input(s).')).toBeInTheDocument();
     expect(screen.getByText(/step 2 returned no records/)).toBeInTheDocument();
   });
@@ -75,12 +79,98 @@ describe('WorkflowRunner', () => {
     render(<WorkflowRunner workflow={wf} />);
     await userEvent.type(screen.getByTestId('field-customerId'), 'C1');
     await userEvent.type(screen.getByTestId('field-contributorId'), 'CT7');
-    await userEvent.click(screen.getByRole('button', { name: 'Fetch All Details' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
     const field = await screen.findByTestId('override-3-client_unique_id');
     await userEvent.clear(field);
     await userEvent.type(field, 'CLIENT-B');
     const buttons = screen.getAllByRole('button', { name: 'Run this step' });
     await userEvent.click(buttons[1]);
     await waitFor(() => expect(api.executeOnRun).toHaveBeenCalledWith('abcdef12-0000', [3], { 3: { client_unique_id: 'CLIENT-B' } }));
+  });
+
+  describe('runtime inputs', () => {
+    const withDefaults: Workflow = {
+      ...wf,
+      inputs: [
+        { name: 'customerId', label: 'Customer ID', type: 'STRING', required: true, defaultValue: 'C-DEFAULT' },
+        { name: 'contributorId', label: 'Contributor ID', type: 'STRING', required: false },
+        { name: 'when', label: 'When', type: 'DATE', required: false },
+        { name: 'dryRun', label: 'Dry run', type: 'BOOLEAN', required: false },
+      ],
+    };
+    const form: RunForm = {
+      inputs: [],
+      steps: [
+        { order: 2, name: 'Fetch contributor', stepType: 'QUERY', params: [
+          { name: 'contributor', label: 'Contributor', type: 'STRING', required: true, sourceKind: 'WORKFLOW_INPUT', source: "Workflow input 'contributorId'", inputRef: 'contributorId' },
+          { name: 'since', label: 'Since', type: 'DATE', required: false, sourceKind: 'NONE', source: 'Not provided' },
+          { name: 'limit', label: 'Limit', type: 'INTEGER', required: false, defaultValue: '25', sourceKind: 'DEFAULT', source: 'Default value' },
+          { name: 'flag', label: 'Flag', type: 'BOOLEAN', required: false, sourceKind: 'NONE', source: 'Not provided' }] },
+        { order: 3, name: 'Fetch debit instruction', stepType: 'QUERY', params: [
+          { name: 'client_unique_id', label: 'Client', type: 'STRING', required: true, sourceKind: 'AUTOMATIC', source: 'Step 2 -> clientUniqueId' },
+          { name: 'note', label: 'Note', type: 'STRING', required: true, sourceKind: 'NONE', source: 'Not provided' }] },
+      ],
+    };
+    const wfForm: Workflow = { ...withDefaults, steps: [
+      { ...wf.steps[0], mappings: [...wf.steps[0].mappings, { paramName: 'since', sourceType: 'CONSTANT', constantValue: '' }] },
+      wf.steps[1]] };
+
+    it('prefills workflow-input defaults, lets typed values win and treats a default as not missing', async () => {
+      vi.mocked(api.startRun).mockResolvedValue(run());
+      render(<WorkflowRunner workflow={withDefaults} />);
+      expect(screen.getByTestId('field-customerId')).toHaveValue('C-DEFAULT');
+      expect(screen.getByText(/Default: C-DEFAULT/)).toBeInTheDocument();
+      expect(screen.queryByText(/No value for required input/)).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+      await waitFor(() => expect(api.startRun).toHaveBeenCalledWith(1, { customerId: 'C-DEFAULT' }, {}, []));
+      await userEvent.clear(screen.getByTestId('field-customerId'));
+      await userEvent.type(screen.getByTestId('field-customerId'), 'C-TYPED');
+      await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+      await waitFor(() => expect(api.startRun).toHaveBeenLastCalledWith(1, { customerId: 'C-TYPED' }, {}, []));
+    });
+
+    it('supports text, number, date and yes/no inputs and an empty optional value', async () => {
+      vi.mocked(api.startRun).mockResolvedValue(run());
+      render(<WorkflowRunner workflow={withDefaults} />);
+      expect(screen.getByTestId('field-when')).toHaveAttribute('type', 'date');
+      await userEvent.type(screen.getByTestId('field-when'), '2026-05-05');
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Dry run' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+      // contributorId was left empty (optional): it is simply not sent
+      await waitFor(() => expect(api.startRun).toHaveBeenCalledWith(1, { customerId: 'C-DEFAULT', when: '2026-05-05', dryRun: 'true' }, {}, []));
+    });
+
+    it('saves typed values as defaults only when asked to', async () => {
+      vi.mocked(api.saveInputDefaults).mockResolvedValue(undefined);
+      render(<WorkflowRunner workflow={withDefaults} />);
+      await userEvent.type(screen.getByTestId('field-contributorId'), 'CT-9');
+      expect(api.saveInputDefaults).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole('button', { name: 'Save as defaults' }));
+      await waitFor(() => expect(api.saveInputDefaults).toHaveBeenCalledWith(1, { customerId: 'C-DEFAULT', contributorId: 'CT-9' }));
+    });
+
+    it('shows where each step value comes from before anything runs, with typed override fields and required marks', async () => {
+      vi.mocked(api.workflowRunForm).mockResolvedValue(form);
+      render(<WorkflowRunner workflow={wfForm} />);
+      expect(await screen.findByText('Automatic · Step 2 -> clientUniqueId')).toBeInTheDocument();
+      expect(screen.getByText("Workflow input 'contributorId'")).toBeInTheDocument();
+      expect(screen.getByText('Default value')).toBeInTheDocument();
+      expect(screen.getByText('Required: nothing provides it yet')).toBeInTheDocument();
+      expect(screen.getAllByText('Optional: left empty')).toHaveLength(2);
+      expect(screen.getByTestId('override-2-since')).toHaveAttribute('type', 'date');
+      expect(screen.getByTestId('override-2-limit')).toHaveAttribute('placeholder', '25');
+      expect(screen.getByTestId('override-3-client_unique_id')).toHaveAttribute('placeholder', 'automatic');
+    });
+
+    it('sends typed overrides for this run only and an untouched optional field sends nothing', async () => {
+      vi.mocked(api.workflowRunForm).mockResolvedValue(form);
+      vi.mocked(api.startRun).mockResolvedValue(run());
+      render(<WorkflowRunner workflow={wfForm} />);
+      await userEvent.type(await screen.findByTestId('override-2-limit'), '50');
+      await userEvent.type(screen.getByTestId('override-3-note'), 'hello');
+      await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+      await waitFor(() => expect(api.startRun).toHaveBeenCalledWith(1, { customerId: 'C-DEFAULT' }, { 2: { limit: '50' }, 3: { note: 'hello' } }, []));
+      expect(api.saveInputDefaults).not.toHaveBeenCalled();
+    });
   });
 });

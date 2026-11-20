@@ -46,6 +46,14 @@ to the next micro flow. A failing micro flow fails its parent step (the parent's
 style browser (breadcrumbs, folder cards, drag a workflow onto a folder); suggested top-level folders: *Main Business Flows*
 and *Micro Business Flows*.
 
+## Runtime inputs and flexible variables
+When you click **Run** on a workflow, the dialog opens an **optional** *Runtime inputs* form. Nothing in it has to be filled in.
+- **Workflow inputs** (text, number, date, date & time, yes/no) can have a **default**; it is pre-filled and used when the field is empty.
+- Each step lists its parameters with their type, whether they are required, and where the value comes from: **Automatic** (an earlier step's output), a **workflow input**, a **constant**, a **default**, or *not provided*. Type into a field to override that one value **for this run only**.
+- Resolution order: **runtime override → automatic value → default → empty (if optional)**. Only a genuinely required value that is nowhere to be found blocks a step, and only that step. Required inputs are never a reason to refuse the whole run.
+- **Save as defaults** is the only way run-time values change the workflow.
+- **Outputs are optional.** Every API and database response is kept for the run. Reference any part of it with a path (`data.items.0.id`, `rows.1.id`) in a mapping, or write `{{step2.data.wallet.id}}` anywhere a `{{variable}}` is allowed.
+
 ## History
 Each API workflow run stores per-step status, attempts, HTTP status, timings and the extracted variable names/values
 (secrets masked); failed steps also keep a response snippet. **Clear history** removes run records only: requests, workflows,
