@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Autocomplete, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
-import type { SavedQuery } from '../types';
+import type { QueryResult, SavedQuery } from '../types';
+import DynamicForm from './DynamicForm';
+import ResultTable from './ResultTable';
+import { initialValues, missingRequired, ms } from '../utils/format';
 import ParamDefinitionEditor from './ParamDefinitionEditor';
 import SqlEditorBox from './SqlEditorBox';
 import QueryExtractionEditor from './QueryExtractionEditor';
@@ -27,14 +31,27 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
   const { loading, error, setError, run } = useAsync();
   const varFolders = useFolders('VARIABLE');
   const [dbs, setDbs] = useState<string[]>([]);
+  const [testValues, setTestValues] = useState<Record<string, string>>({});
+  const [testResult, setTestResult] = useState<QueryResult | null>(null);
   const mongo = q.engine === 'MONGODB';
   useEffect(() => { if (open && !mongo) api.databases().then((r) => setDbs(r.databases)).catch(() => setDbs([])); }, [open, mongo]);
 
-  useEffect(() => { if (open) { setQ(initial ?? EMPTY); setError(null); } }, [open, initial, setError]);
+  useEffect(() => { if (open) { setQ(initial ?? EMPTY); setError(null); setTestResult(null); setTestValues({}); } }, [open, initial, setError]);
 
   const detect = async () => {
     const a = await run(() => (mongo ? api.mongoAnalyze(q.sql) : api.analyzeSql(q.sql)));
     if (a) setQ((cur) => ({ ...cur, queryType: a.write ? 'WRITE' : 'READ', parameters: a.suggestedParameters.map((s, i) => ({ ...s, ...(cur.parameters[i] && cur.parameters.length === a.placeholders ? { name: cur.parameters[i].name, label: cur.parameters[i].label, type: cur.parameters[i].type, required: cur.parameters[i].required, defaultValue: cur.parameters[i].defaultValue } : {}) })) }));
+  };
+
+  // parameters that are typed in by hand need a test value; Automatic ones are resolved from their variable
+  const manual = q.parameters.filter((p) => !(p.defaultValue ?? '').trim());
+  const execute = async () => {
+    const vals = { ...initialValues(manual), ...testValues };
+    const missing = missingRequired(manual, vals);
+    if (missing.length) return setError(`Enter a test value for: ${missing.join(', ')}`);
+    setTestResult(null);
+    const r = await run(() => api.testRunQuery(q, vals));
+    if (r) setTestResult(r);
   };
 
   const save = async () => {
@@ -73,11 +90,24 @@ export default function QueryEditDialog({ open, initial, onClose, onSaved }: Pro
           <SqlEditorBox value={q.sql} onChange={(v) => setQ({ ...q, sql: v })} height={200} language={mongo ? 'json' : 'sql'} />
           <Stack direction="row" spacing={2} alignItems="center">
             <Button variant="outlined" onClick={detect} disabled={loading || !q.sql.trim()}>Detect parameters from "?"</Button>
+            <Tooltip title={q.queryType === 'WRITE' ? "Write queries can't be test-run here. Save it, then run it from the list." : ''}>
+              <Box component="span"><Button variant="contained" startIcon={<PlayArrowIcon />} onClick={execute} disabled={loading || !q.sql.trim() || q.queryType === 'WRITE'}>Execute query</Button></Box>
+            </Tooltip>
             {mongo && <Button onClick={() => setQ({ ...q, sql: MONGO_EXAMPLE })} disabled={loading}>Insert example</Button>}
             {q.queryType && <Typography variant="body2"><b>{q.queryType}</b></Typography>}
           </Stack>
           <Typography variant="subtitle2">Parameters</Typography>
           <ParamDefinitionEditor parameters={q.parameters} onChange={(parameters) => setQ({ ...q, parameters })} />
+          {manual.length > 0 && <DynamicForm parameters={manual} values={{ ...initialValues(manual), ...testValues }} onChange={setTestValues} disabled={loading} />}
+          {testResult && (
+            <Stack spacing={1}>
+              <Stack direction="row" spacing={1}>
+                <Chip size="small" color="success" label={testResult.affectedRows != null ? `${testResult.affectedRows} row(s) affected` : `${testResult.rowCount} row(s)`} />
+                <Chip size="small" label={ms(testResult.durationMs)} />
+              </Stack>
+              {testResult.columns.length > 0 && <ResultTable columns={testResult.columns} rows={testResult.rows} truncated={testResult.truncated} maxHeight={260} />}
+            </Stack>
+          )}
           {q.queryType !== 'WRITE' && <QueryExtractionEditor value={q.extractions ?? []} folders={varFolders.folders} onChange={(extractions) => setQ({ ...q, extractions })} />}
           <Stack direction="row" spacing={2} alignItems="center">
             <Typography variant="body2">Environments (none = all):</Typography>

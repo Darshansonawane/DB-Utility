@@ -297,6 +297,21 @@ public class QueryLibraryService {
         }
     }
 
+    /**
+     * Runs a query that is still being written (not saved) so its output can be checked first. Read-only: a write query must be saved and
+     * then run with the normal preview and confirmation. Nothing is stored except the usual execution history.
+     */
+    public QueryResult testRun(SavedQuery draft, Map<String, String> values) {
+        String name = draft.name() == null || draft.name().isBlank() ? "Unsaved query" : draft.name();
+        SavedQuery q = normalise(new SavedQuery(null, name, draft.description(), draft.category(), draft.sql(), draft.queryType(), draft.environments(), true,
+                draft.databaseName(), draft.parameters(), draft.extractions(), draft.engine()));
+        if (q.queryType() == QueryType.WRITE) {
+            throw ApiException.badRequest("Write queries can't be test-run here. Save it, then run it from the list to preview and confirm the change.");
+        }
+        checkRunnable(q);
+        return run(q, bind(q, values), null, new SqlExecutionService.ExecContext("QUERY_TEST", null, q.name(), false, q.databaseName()));
+    }
+
     public QueryResult execute(long id, Map<String, String> values, String token) {
         SavedQuery q = get(id);
         checkRunnable(q);

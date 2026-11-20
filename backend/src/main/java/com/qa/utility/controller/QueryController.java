@@ -89,6 +89,15 @@ public class QueryController {
         return service.preview(id, b.values());
     }
 
+    public record TestBody(SavedQuery query, Map<String, String> values) {
+    }
+
+    /** Runs the query being edited (read-only) without saving it. */
+    @PostMapping("/test-run")
+    public QueryResult testRun(@RequestBody TestBody b) {
+        return service.testRun(b.query(), b.values() == null ? Map.of() : b.values());
+    }
+
     @PostMapping("/{id}/execute")
     public QueryResult execute(@PathVariable long id, @RequestBody ExecuteBody b) {
         return service.execute(id, b.values(), b.confirmationToken());

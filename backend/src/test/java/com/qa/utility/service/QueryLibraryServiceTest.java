@@ -47,6 +47,18 @@ class QueryLibraryServiceTest extends AbstractDbTest {
     }
 
     @Test
+    void testRunExecutesAnUnsavedReadQueryAndRefusesWrites() {
+        long before = library.search(null, null).size();
+        SavedQuery draft = new SavedQuery(null, "", null, null, "SELECT * FROM employee_transaction WHERE hr_id = ?", QueryType.READ, List.of(), true, List.of(p("hr_id", ParamType.STRING)));
+        var r = library.testRun(draft, Map.of("hr_id", "HR1"));
+        assertTrue(r.rowCount() >= 1);
+        assertEquals(before, library.search(null, null).size(), "a test run must not save anything");
+        SavedQuery write = new SavedQuery(null, "w", null, null, "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", QueryType.WRITE, List.of(), true,
+                List.of(p("a", ParamType.STRING), p("b", ParamType.INTEGER)));
+        assertThrows(ApiException.class, () -> library.testRun(write, Map.of("a", "x", "b", "1")));
+    }
+
+    @Test
     void parameterCountAndClassificationAreEnforced() {
         assertThrows(ApiException.class, () -> library.create(q("bad", "SELECT * FROM employee_transaction WHERE hr_id = ?", QueryType.READ)));
         assertThrows(ApiException.class, () -> library.create(q("bad", "UPDATE employee_transaction SET hr_id = ? WHERE id = ?", QueryType.READ,

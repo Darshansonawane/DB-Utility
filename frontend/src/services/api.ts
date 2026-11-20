@@ -106,6 +106,7 @@ export const api = {
   deleteQuery: (id: number) => d<void>(http.delete(`/queries/${id}`)),
   duplicateQuery: (id: number) => d<SavedQuery>(http.post(`/queries/${id}/duplicate`)),
   setQueryEnabled: (id: number, value: boolean) => d<SavedQuery>(http.post(`/queries/${id}/enabled`, null, { params: { value } })),
+  testRunQuery: (query: SavedQuery, values: Record<string, string>) => d<QueryResult>(http.post('/queries/test-run', { query, values })),
   executeQuery: (id: number, values: Record<string, string>, confirmationToken?: string) =>
     d<QueryResult>(http.post(`/queries/${id}/execute`, { values, confirmationToken })),
   previewQuery: (id: number, values: Record<string, string>) => d<WritePreview>(http.post(`/queries/${id}/preview`, { values })),
