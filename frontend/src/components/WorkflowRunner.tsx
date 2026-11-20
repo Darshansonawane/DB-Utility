@@ -8,9 +8,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import { api } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
-import type { CellEditPreview, ParamType, RunForm, RunFormParam, RunView, StepRunView, Workflow } from '../types';
+import type { ParamType, RunForm, RunFormParam, RunView, StepRunView, Workflow } from '../types';
 import { useNotify } from './Notifier';
-import WritePreviewDialog from './WritePreviewDialog';
 import { ms } from '../utils/format';
 import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
@@ -31,8 +30,6 @@ const defaultsOf = (w: Workflow): Record<string, string> =>
 
 export default function WorkflowRunner({ workflow, onRunChange }: Props) {
   const notify = useNotify();
-  const [cellEdit, setCellEdit] = useState<{ order: number; rowIndex: number; column: string; value: string; preview: CellEditPreview } | null>(null);
-  const [cellBusy, setCellBusy] = useState(false);
   const [form, setForm] = useState<RunForm | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>(() => defaultsOf(workflow));
   const [overrides, setOverrides] = useState<Overrides>({});
@@ -107,24 +104,24 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
     if (ok !== undefined) notify.success('Saved as the default values for this workflow');
   };
 
-  /** Double-click edit of a result cell: preview the UPDATE, then confirm. The database row changes; the result shows the new value. */
-  const requestCellEdit = async (order: number, rowIndex: number, column: string, value: string) => {
+  /**
+   * Saves an edited result cell straight to its database row. The server still previews the change and issues its one-time token, but
+   * there is no popup: if the preview is blocked or would touch anything other than exactly one row, nothing is written.
+   */
+  const saveCellEdit = async (order: number, rowIndex: number, column: string, value: string) => {
     if (!run) return;
     try {
-      const preview = await api.previewCellEdit(run.runId, order, { rowIndex, column, value });
-      setCellEdit({ order, rowIndex, column, value, preview });
-    } catch (e) { notify.error(e instanceof Error ? e.message : 'Could not prepare the change'); }
-  };
-  const confirmCellEdit = async () => {
-    if (!run || !cellEdit) return;
-    setCellBusy(true);
-    try {
-      await api.applyCellEdit(run.runId, cellEdit.order, { rowIndex: cellEdit.rowIndex, column: cellEdit.column, value: cellEdit.value, confirmationToken: cellEdit.preview.preview.confirmationToken });
-      setRun((r) => (r ? { ...r, steps: r.steps.map((s) => (s.order !== cellEdit.order || !s.result ? s : { ...s, result: { ...s.result, rows: s.result.rows.map((row, i) => (i !== cellEdit.rowIndex ? row : row.map((v, ci) => (s.result!.columns[ci].name.toLowerCase() === cellEdit.column.toLowerCase() ? cellEdit.value : v)))) } })) } : r));
-      notify.success(`${cellEdit.column} updated in ${cellEdit.preview.table}`);
-      setCellEdit(null);
-    } catch (e) { notify.error(e instanceof Error ? e.message : 'The change was not applied'); }
-    finally { setCellBusy(false); }
+      const prev = await api.previewCellEdit(run.runId, order, { rowIndex, column, value });
+      const wp = prev.preview;
+      if (!wp.executable) throw new Error(wp.blockedReason ?? 'This change is not allowed');
+      if (wp.affectedRows !== 1) throw new Error(`Not saved: this would change ${wp.affectedRows ?? 'an unknown number of'} rows, not exactly one`);
+      await api.applyCellEdit(run.runId, order, { rowIndex, column, value, confirmationToken: wp.confirmationToken });
+      setRun((r) => (r ? { ...r, steps: r.steps.map((s) => (s.order !== order || !s.result ? s : { ...s, result: { ...s.result, rows: s.result.rows.map((row, i) => (i !== rowIndex ? row : row.map((v, ci) => (s.result!.columns[ci].name.toLowerCase() === column.toLowerCase() ? value : v)))) } })) } : r));
+      notify.success(`${column} saved in ${prev.table}`);
+    } catch (e) {
+      notify.error(e instanceof Error ? e.message : 'The change was not saved');
+      throw e;
+    }
   };
 
   const setOverride = (order: number, param: string, v: string) =>
@@ -211,14 +208,13 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
                   </Stack>
                 )}
                 {sv.children && sv.children.length > 0 ? <ChildSteps steps={sv.children} depth={1} /> : sv.result && sv.result.columns.length > 0 && <ResultTable columns={sv.result.columns} rows={sv.result.rows} truncated={sv.result.truncated}
-                  onEditCell={run && !running && (s.stepType ?? 'QUERY') === 'QUERY' ? (ri, col, val) => void requestCellEdit(s.order, ri, col, val) : undefined} />}
+                  onEditCell={run && !running && (s.stepType ?? 'QUERY') === 'QUERY' ? (ri, col, val) => saveCellEdit(s.order, ri, col, val) : undefined} />}
               </Stack>
             </AccordionDetails>
           </Accordion>
           </Box>
         );
       })}
-      <WritePreviewDialog preview={cellEdit?.preview.preview ?? null} busy={cellBusy} onConfirm={confirmCellEdit} onClose={() => setCellEdit(null)} />
     </Stack>
   );
 }

@@ -50,15 +50,17 @@ describe('pipeline bar for waiting and paused steps', () => {
 import userEvent from '@testing-library/user-event';
 import ResultTable from '../components/ResultTable';
 describe('editing a result cell', () => {
-  it('double-click edits, Enter submits the new text, Esc cancels, and plain tables are not editable', async () => {
+  it('double-click edits, the Save button submits the new text and closes the editor, Esc cancels, and plain tables are not editable', async () => {
     const edits: unknown[][] = [];
     const cols = [{ name: 'id', type: 'BIGINT' }, { name: 'contribution_date', type: 'DATE' }];
-    const { rerender } = render(<ResultTable columns={cols} rows={[[6651, '2027-02-01']]} onEditCell={(r, c, v) => edits.push([r, c, v])} />);
+    const { rerender } = render(<ResultTable columns={cols} rows={[[6651, '2027-02-01']]} onEditCell={(r, c, v) => { edits.push([r, c, v]); }} />);
     await userEvent.dblClick(screen.getByText('2027-02-01'));
     const box = screen.getByLabelText('edit contribution_date');
     await userEvent.clear(box);
-    await userEvent.type(box, '2026-12-15{Enter}');
+    await userEvent.type(box, '2026-12-15');
+    await userEvent.click(screen.getByLabelText('save cell'));
     expect(edits).toEqual([[0, 'contribution_date', '2026-12-15']]);
+    expect(screen.queryByLabelText('edit contribution_date')).toBeNull();
     await userEvent.dblClick(screen.getByText('2027-02-01'));
     await userEvent.type(screen.getByLabelText('edit contribution_date'), '9{Escape}');
     expect(edits).toHaveLength(1);
