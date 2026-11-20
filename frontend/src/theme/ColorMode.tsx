@@ -13,9 +13,15 @@ export function readStoredMode(): ColorModePref {
   return 'system';
 }
 
-/** HelloGroup brand red and its shades: hover/active use dark, tints use light. Everything primary in the app derives from these. */
+/**
+ * HelloGroup two-colour palette, as in the HelloPaisa app: deep navy for structure and actions (buttons, headings, links, focus) and
+ * brand red for accents (active markers, highlights, secondary emphasis). In dark mode red takes over the actions, since navy would vanish.
+ * Hover/active use `dark`, tints use `light`; everything derives from these tokens.
+ */
 export const BRAND_RED = '#E22042';
+export const BRAND_NAVY = '#0F3F78';
 const RED = { main: BRAND_RED, light: '#F0647D', dark: '#B8142F', contrastText: '#FFFFFF' };
+const NAVY = { main: BRAND_NAVY, light: '#3F6FA8', dark: '#0A2A52', contrastText: '#FFFFFF' };
 
 const EASE = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 
@@ -34,7 +40,7 @@ const sharedComponents = {
   MuiDialog: { styleOverrides: { paper: { borderRadius: 14 } } },
   MuiTableRow: { styleOverrides: { root: { transition: `background-color 160ms ${EASE}` } } },
   MuiListItemButton: {
-    styleOverrides: { root: { transition: `background-color 160ms ${EASE}, padding-left 160ms ${EASE}`, '&:hover': { backgroundColor: 'rgba(226, 32, 66, 0.08)' } } },
+    styleOverrides: { root: { transition: `background-color 160ms ${EASE}, padding-left 160ms ${EASE}`, '&:hover': { backgroundColor: 'rgba(15, 63, 120, 0.08)' } } },
   },
   MuiTextField: { defaultProps: { variant: 'outlined' as const } },
 };
@@ -46,17 +52,25 @@ const base = {
 };
 export const lightTheme = createTheme({
   ...base,
-  palette: { mode: 'light', primary: RED, secondary: { main: '#00897b' }, background: { default: '#f3f6fb' } },
+  palette: {
+    mode: 'light', primary: NAVY, secondary: RED, background: { default: '#f4f6fa' },
+    text: { primary: '#10254A', secondary: '#4A5B78' },
+  },
+  components: {
+    ...sharedComponents,
+    // navy header with a red accent line, like the HelloPaisa launch screen
+    MuiAppBar: { styleOverrides: { colorPrimary: { backgroundImage: 'linear-gradient(90deg, #0A2A52, #0F3F78)', borderBottom: `3px solid ${BRAND_RED}` } } },
+  },
 });
 export const darkTheme = createTheme({
   ...base,
   palette: {
     mode: 'dark',
     primary: { ...RED, light: '#FF8FA3' },
-    secondary: { main: '#26c6b5' },
+    secondary: { ...RED, light: '#FF8FA3' },
     background: { default: '#07142b', paper: '#0d2147' },
   },
-  components: { ...sharedComponents, MuiAppBar: { styleOverrides: { colorPrimary: { backgroundColor: '#0A1F44', backgroundImage: 'none' } } } },
+  components: { ...sharedComponents, MuiAppBar: { styleOverrides: { colorPrimary: { backgroundColor: '#0A1F44', backgroundImage: 'none', borderBottom: `3px solid ${BRAND_RED}` } } } },
 });
 
 interface Ctx { preference: ColorModePref; mode: 'light' | 'dark'; setPreference: (p: ColorModePref) => void; cycle: () => void }

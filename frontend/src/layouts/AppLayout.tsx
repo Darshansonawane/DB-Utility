@@ -59,7 +59,7 @@ export default function AppLayout() {
         <Toolbar>
           <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, color: 'common.white' }}>
-              <LogoMark size={30} title="" />
+              <LogoMark size={30} title="" onDark />
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="h6" component="h1" noWrap sx={{ fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.15 }}>{APP_NAME}</Typography>
                 <Typography variant="caption" component="p" noWrap sx={{ m: 0, opacity: 0.75, lineHeight: 1.1, display: { xs: 'none', sm: 'block' } }}>{APP_SUBTITLE}</Typography>
@@ -99,7 +99,7 @@ export default function AppLayout() {
             <Tooltip key={n.to} title={collapsed ? n.label : ''} placement="right">
               <ListItemButton component={NavLink} to={n.to} end={n.to === '/'} aria-label={n.label}
                 sx={{ justifyContent: collapsed ? 'center' : 'flex-start', px: collapsed ? 0 : 2,
-                  '&.active': { bgcolor: 'action.selected', borderRight: 3, borderColor: 'primary.main', fontWeight: 700 } }}>
+                  '&.active': { bgcolor: 'action.selected', borderRight: 3, borderColor: 'secondary.main', fontWeight: 700 } }}>
                 <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, justifyContent: 'center' }}>{n.icon}</ListItemIcon>
                 {!collapsed && <ListItemText primary={n.label} />}
               </ListItemButton>
