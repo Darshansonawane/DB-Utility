@@ -166,13 +166,13 @@ public class ApiAutomationController {
 
     @GetMapping("/environment")
     public Map<String, String> environment() {
-        return Map.of("environment", variables.activeEnvironment());
+        return Map.of("environment", variables.effectiveEnvironment());
     }
 
     @PutMapping("/environment")
     public Map<String, String> setEnvironment(@RequestBody Map<String, String> b) {
         variables.setActiveEnvironment(b.get("environment"));
-        return Map.of("environment", variables.activeEnvironment());
+        return Map.of("environment", variables.effectiveEnvironment());
     }
 
     // ---- moving items between folders

@@ -113,6 +113,24 @@ class PlatformEnhancementsTest extends AbstractDbTest {
     // ------------------------------------------------------------------ variables
 
     @Test
+    void aRunResolvesVariablesInTheEnvironmentPickedWhenItStarted() {
+        variables.save(null, body("baseUrl", "https://dev.example", "ENVIRONMENT", 0L, "DEV"));
+        variables.save(null, body("baseUrl", "https://qa.example", "ENVIRONMENT", 0L, "QA"));
+        variables.save(null, body("baseUrl", "https://stg.example", "ENVIRONMENT", 0L, "STAGING"));
+        variables.setActiveEnvironment("DEV");
+        VarScope devRun = new VarScope(false);
+        devRun.setEnvironment(variables.effectiveEnvironment());
+        variables.setActiveEnvironment("Staging"); // the picker changes while the DEV run is still going
+        assertEquals("https://dev.example/x", variables.resolve("{{baseUrl}}/x", false, devRun), "the run keeps its own environment");
+        VarScope stagingRun = new VarScope(false);
+        stagingRun.setEnvironment(variables.effectiveEnvironment());
+        assertEquals("https://stg.example/x", variables.resolve("{{baseUrl}}/x", false, stagingRun));
+        VarScope qaRun = new VarScope(false);
+        qaRun.setEnvironment("QA");
+        assertEquals("https://qa.example/x", variables.resolve("{{baseUrl}}/x", false, qaRun));
+    }
+
+    @Test
     void variableScopesFollowTheDocumentedPrecedence() {
         Folder wallet = folder("VARIABLE", 0, "Wallet");
         Folder walletSub = folder("VARIABLE", wallet.id(), "Sub");

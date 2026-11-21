@@ -110,6 +110,7 @@ public class ApiExecutor {
     /** What would be sent, with every {{variable}} that can be resolved filled in (secrets masked). Nothing is sent and no script runs. */
     public ApiDtos.PreviewResult preview(ApiRequestDef def) {
         VarScope local = new VarScope(false);
+        local.setEnvironment(variables.effectiveEnvironment());
         local.setStepFolders(folders.chain(def.folderId()));
         List<ApiDtos.TokenInfo> tokens = new ArrayList<>();
         tokens.addAll(variables.analyze(def.url(), local));
@@ -138,6 +139,7 @@ public class ApiExecutor {
         try {
             // a run scope, or a private one so values set by the script resolve in this call (and are shared per the scope's rules)
             VarScope local = scope != null ? scope : new VarScope(true);
+            if (local.environment() == null) local.setEnvironment(variables.effectiveEnvironment());
             local.setStepFolders(folders.chain(def.folderId())); // FOLDER-scoped variables of this request's folder apply
             String urlT = def.url().trim();
             List<Header> headersT = def.headers();

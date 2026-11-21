@@ -6,6 +6,7 @@ import { useAsync } from '../../hooks/useAsync';
 import type { ApiRequestDef, ApiRunResult, QueryResult, SavedQuery, Workflow, WorkflowStep } from '../../types';
 import DynamicForm from '../DynamicForm';
 import ResultTable from '../ResultTable';
+import RunEnvironment from '../RunEnvironment';
 import { initialValues, missingRequired, ms } from '../../utils/format';
 
 /** Values a step parameter already has while editing: a constant, or the default of the workflow input it reads. */
@@ -67,7 +68,8 @@ export default function StepTestRun({ step, steps, inputs, results, onResult, qu
   return (
     <Stack spacing={1}>
       {asked.length > 0 && <DynamicForm parameters={asked} values={{ ...initialValues(asked), ...values }} onChange={setValues} disabled={loading} />}
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        {apiRequest && <RunEnvironment />}
         <Tooltip title={write ? "Write queries can't be test-run here. Run the workflow to preview and confirm them." : ''}>
           <Box component="span"><Button size="small" variant="outlined" startIcon={<PlayArrowIcon />} onClick={exec} disabled={loading || write}>Test step</Button></Box>
         </Tooltip>

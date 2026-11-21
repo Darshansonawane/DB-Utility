@@ -20,6 +20,17 @@ public final class VarScope {
     private volatile List<Long> baseFolders = List.of();
     private volatile List<Long> stepFolders = List.of();
 
+    /** The environment this run resolves ENVIRONMENT variables in; fixed when the run starts so switching the picker mid-run changes nothing. */
+    private volatile String environment;
+
+    public String environment() {
+        return environment;
+    }
+
+    public void setEnvironment(String environment) {
+        this.environment = environment == null || environment.isBlank() ? null : environment;
+    }
+
     public VarScope(boolean publishGlobal) {
         this.publishGlobal = publishGlobal;
     }

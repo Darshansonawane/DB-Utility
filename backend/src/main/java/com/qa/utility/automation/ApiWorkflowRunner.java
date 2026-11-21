@@ -131,6 +131,7 @@ public class ApiWorkflowRunner {
             masked.put(k, Masking.mask(v));
         });
         RunState rs = new RunState(wf, System.getProperty("user.name"), masked);
+        rs.scope.setEnvironment(variables.effectiveEnvironment()); // this run keeps the environment picked now
         in.forEach((k, v) -> rs.scope.set(k, v == null ? "" : v, false));
         rs.scope.setBaseFolders(folders.chain(wf.folderId())); // FOLDER-scoped variables of the workflow's folder apply to its steps
         active.put(rs.runId, rs);

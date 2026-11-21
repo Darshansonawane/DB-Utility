@@ -3,6 +3,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import DriveFileMoveIcon from '@mui/icons-material/DriveFileMove';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import type { Workflow } from '../../types';
 import { timeAgo } from '../../utils/time';
@@ -10,9 +11,9 @@ import LastRunBadge from './LastRunBadge';
 import { WORKFLOW_DRAG } from './workflowHierarchy';
 
 /** Level 3: a workflow. Name, description, step count, last execution; Run, Edit, Move and Delete. */
-export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit, onMove, onDelete }: {
+export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit, onMove, onDuplicate, onDelete }: {
   w: Workflow; index?: number; path?: string; usedIn?: string[];
-  onRun: () => void; onEdit: () => void; onMove: () => void; onDelete: () => void;
+  onRun: () => void; onEdit: () => void; onMove: () => void; onDuplicate: () => void; onDelete: () => void;
 }) {
   return (
     <Card className="fade-up" style={{ '--i': Math.min(index, 8) } as React.CSSProperties} draggable
@@ -37,6 +38,7 @@ export default function WorkflowCard({ w, index = 0, path, usedIn, onRun, onEdit
           <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={onRun}>Run</Button>
           <Button size="small" onClick={onEdit}>Edit</Button>
           <Tooltip title="Move"><IconButton size="small" aria-label={`move ${w.name}`} onClick={onMove}><DriveFileMoveIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Duplicate"><IconButton size="small" aria-label={`duplicate ${w.name}`} onClick={onDuplicate}><ContentCopyIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Delete"><IconButton size="small" color="error" aria-label={`delete ${w.name}`} onClick={onDelete}><DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip>
         </Stack>
       </Stack>

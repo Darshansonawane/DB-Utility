@@ -312,3 +312,21 @@ describe('navigation tree', () => {
     expect(await screen.findByTestId('workflow-1')).toBeInTheDocument();
   });
 });
+
+import { copyName, duplicateOf } from '../components/projects/duplicate';
+describe('duplicating a workflow', () => {
+  it('picks the first free copy name', () => {
+    expect(copyName('Flow', ['Flow'])).toBe('Flow (copy)');
+    expect(copyName('Flow', ['Flow', 'flow (copy)', 'Flow (copy 2)'])).toBe('Flow (copy 3)');
+  });
+  it('is an unsaved copy in the same place, without ids or run history', () => {
+    const w = { id: 7, name: 'A', inputs: [], projectId: 2, folderId: 5, lastStatus: 'SUCCESS', lastRunAt: 'x', steps: [{ id: 1, order: 1, name: 's', queryId: 3, mappings: [] }] } as never;
+    const c = duplicateOf(w, ['A']);
+    expect(c.id).toBeUndefined();
+    expect(c.name).toBe('A (copy)');
+    expect([c.projectId, c.folderId]).toEqual([2, 5]);
+    expect(c.lastStatus).toBeUndefined();
+    expect(c.steps[0].id).toBeUndefined();
+    expect(c.steps[0].queryId).toBe(3);
+  });
+});

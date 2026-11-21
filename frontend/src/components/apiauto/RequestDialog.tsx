@@ -8,6 +8,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import { api } from '../../services/api';
+import RunEnvironment from '../RunEnvironment';
 import { useAsync } from '../../hooks/useAsync';
 import type { ApiExtraction, ApiRequestDef, ApiRunResult, Folder, PreviewResult } from '../../types';
 import { FolderSelect } from '../folders/FolderPicker';
@@ -120,6 +121,7 @@ export default function RequestDialog({ initial, folders, onClose, onSaved }: { 
       <DialogActions>
         <Button onClick={close}>Close</Button>
         <Button variant="text" onClick={showPreview} disabled={loading || !r.url.trim()}>Preview values</Button>
+        <RunEnvironment />
         <Button startIcon={<PlayArrowIcon />} variant="outlined" onClick={send} disabled={loading || !r.url.trim()}>Send</Button>
         <Button variant="contained" onClick={save} disabled={loading || !r.name.trim() || !r.url.trim()}>Save</Button>
       </DialogActions>

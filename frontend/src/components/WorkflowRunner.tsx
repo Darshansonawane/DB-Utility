@@ -15,6 +15,7 @@ import DynamicForm from './DynamicForm';
 import ResultTable from './ResultTable';
 import StatusChip from './StatusChip';
 import PipelineBar from './motion/PipelineBar';
+import RunEnvironment from './RunEnvironment';
 import FlowConnector, { flowStateOf } from './motion/FlowConnector';
 
 type Overrides = Record<number, Record<string, string>>;
@@ -130,7 +131,10 @@ export default function WorkflowRunner({ workflow, onRunChange }: Props) {
   return (
     <Stack spacing={2}>
       <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle1" fontWeight={700} gutterBottom>Runtime inputs <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography></Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap spacing={1} sx={{ mb: 1 }}>
+          <Typography variant="subtitle1" fontWeight={700}>Runtime inputs <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography></Typography>
+          <RunEnvironment />
+        </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
           Everything here is optional. Values flow automatically from earlier steps; type a value only to override one for this run. Overrides apply to this run only unless you save them.
         </Typography>

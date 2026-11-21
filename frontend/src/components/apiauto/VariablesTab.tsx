@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Card, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, InputAdornment, MenuItem,
-  Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+  Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -12,6 +12,7 @@ import { api } from '../../services/api';
 import { useAsync } from '../../hooks/useAsync';
 import type { Folder, VariableBody, VariableView } from '../../types';
 import FolderTree from '../folders/FolderTree';
+import RunEnvironment from '../RunEnvironment';
 import FolderPicker, { FolderSelect } from '../folders/FolderPicker';
 import { ALL, folderPaths, inSelection } from '../folders/folderUtils';
 
@@ -73,10 +74,8 @@ export default function VariablesTab({ vars, folders, reload, reloadFolders }: {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<VariableView | null | undefined>(undefined);
   const [moving, setMoving] = useState<VariableView | null>(null);
-  const [env, setEnv] = useState('');
   const { error, run } = useAsync();
   const paths = useMemo(() => folderPaths(folders), [folders]);
-  useEffect(() => { api.activeEnvironment().then((r) => setEnv(r.environment)).catch(() => undefined); }, []);
   const counts = useMemo(() => {
     const c: Record<number, number> = { [ALL]: vars.length, 0: 0 };
     for (const v of vars) c[v.folderId] = (c[v.folderId] ?? 0) + 1;
@@ -96,13 +95,7 @@ export default function VariablesTab({ vars, folders, reload, reloadFolders }: {
         </Alert>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing(null)}>New variable</Button>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="body2">Active environment:</Typography>
-            <ToggleButtonGroup size="small" exclusive value={env} aria-label="active environment"
-              onChange={async (_, v) => { if (v === null) return; const r = await run(() => api.setActiveEnvironment(v)); if (r) { setEnv(r.environment); reload(); } }}>
-              <ToggleButton value="">None</ToggleButton><ToggleButton value="QA">QA</ToggleButton><ToggleButton value="STAGING">Staging</ToggleButton><ToggleButton value="DEV">Development</ToggleButton>
-            </ToggleButtonGroup>
-          </Stack>
+          <RunEnvironment label="Environment" />
           <TextField size="small" placeholder="Search variables" value={search} onChange={(e) => setSearch(e.target.value)} sx={{ ml: 'auto', minWidth: 220 }}
             InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
         </Stack>

@@ -13,6 +13,7 @@ import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
 import { api, errMsg } from '../services/api';
 import { useAsync } from '../hooks/useAsync';
 import { useNotify } from '../components/Notifier';
+import { duplicateOf } from '../components/projects/duplicate';
 import type { Folder, Project, Workflow } from '../types';
 import WorkflowEditDialog from '../components/WorkflowEditDialog';
 import WorkflowRunner from '../components/WorkflowRunner';
@@ -116,6 +117,12 @@ export default function WorkflowManager() {
   const act = async (fn: () => Promise<unknown>, okMessage?: string) => {
     try { await fn(); if (okMessage) notify.success(okMessage); await load(); return true; } catch (e) { notify.error(errMsg(e)); return false; }
   };
+  /** Saves a copy right next to the original (same project and folder) so it can be renamed and changed freely. */
+  const duplicateWorkflow = async (w: Workflow) => {
+    const taken = data.workflows.filter((x) => (x.projectId ?? 0) === (w.projectId ?? 0)).map((x) => x.name);
+    const copy = duplicateOf(w, taken);
+    await act(async () => { await api.createWorkflow(copy); }, `Duplicated as "${copy.name}"`);
+  };
   const moveWorkflowTo = async (id: number, targetProject: number, targetFolder: number) => {
     const w = data.workflows.find((x) => x.id === id);
     if (!w || ((w.projectId ?? 0) === targetProject && (w.folderId ?? 0) === targetFolder)) return;
@@ -163,7 +170,7 @@ export default function WorkflowManager() {
   };
   const workflowCard = (w: Workflow, i: number, withPath = false) => (
     <WorkflowCard key={w.id} w={w} index={i} usedIn={usedIn.get(w.id!)} path={withPath ? pathLabel(data, w.projectId ?? 0, w.folderId ?? 0) : undefined}
-      onRun={() => setRunning(w)} onEdit={() => setEditing(w)} onMove={() => setDlg({ kind: 'moveWorkflow', workflow: w })} onDelete={() => setDlg({ kind: 'deleteWorkflow', workflow: w })}
+      onRun={() => setRunning(w)} onEdit={() => setEditing(w)} onMove={() => setDlg({ kind: 'moveWorkflow', workflow: w })} onDuplicate={() => void duplicateWorkflow(w)} onDelete={() => setDlg({ kind: 'deleteWorkflow', workflow: w })}
     />
   );
   const projectCard = (p: Project, i: number) => (

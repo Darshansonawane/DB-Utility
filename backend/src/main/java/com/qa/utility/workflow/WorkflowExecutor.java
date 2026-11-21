@@ -90,11 +90,13 @@ public class WorkflowExecutor {
     private final ApiAutomationRepository apiRequests;
     private final ApiStepRunner apiSteps;
     private final com.qa.utility.service.MongoTargetProvider mongoProvider;
+    private final com.qa.utility.automation.VariableService variables;
 
     public WorkflowExecutor(AppProperties props, WorkflowService workflows, SavedQueryRepository queries, QueryLibraryService library,
                             SqlExecutionService sql, HistoryRepository history, SettingsService settings, TargetDataSourceProvider provider,
                             ApiAutomationRepository apiRequests, ApiStepRunner apiSteps,
-                            com.qa.utility.service.MongoTargetProvider mongoProvider) {
+                            com.qa.utility.service.MongoTargetProvider mongoProvider, com.qa.utility.automation.VariableService variables) {
+        this.variables = variables;
         this.mongoProvider = mongoProvider;
         this.apiRequests = apiRequests;
         this.apiSteps = apiSteps;
@@ -225,6 +227,7 @@ public class WorkflowExecutor {
             }
         }
         RunContext ctx = new RunContext(w, in, conn, null);
+        ctx.scope.setEnvironment(variables.effectiveEnvironment()); // this run keeps the environment picked now
         in.forEach((k, v) -> ctx.scope.set(k, v, false)); // workflow inputs are usable as {{name}} in API steps and query values
         installStepReferences(ctx);
         store.put(ctx.runId, ctx);

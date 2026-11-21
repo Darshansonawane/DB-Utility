@@ -9,6 +9,7 @@ import VariablesTab from '../components/apiauto/VariablesTab';
 import ApiWorkflowsTab from '../components/apiwf/ApiWorkflowsTab';
 import ApiRunsTab from '../components/apiwf/ApiRunsTab';
 import ApiReportsTab from '../components/apiwf/ApiReportsTab';
+import RunEnvironment from '../components/RunEnvironment';
 
 export default function ApiAutomation() {
   const [tab, setTab] = useState(0);
@@ -28,7 +29,10 @@ export default function ApiAutomation() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h5" fontWeight={700}>API Manager</Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap spacing={1}>
+        <Typography variant="h5" fontWeight={700}>API Manager</Typography>
+        <RunEnvironment />
+      </Stack>
       <Typography variant="body2" color="text.secondary">
         Call your QA/Staging APIs, save values from the responses (such as a new wallet id) into variables, feed them into SQL queries, and use them in workflows as {'{{name}}'}.
       </Typography>

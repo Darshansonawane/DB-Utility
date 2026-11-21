@@ -120,14 +120,27 @@ public class VariableService {
         repo.clearVariables();
     }
 
+    /** The saved default environment (used by anyone who has not picked one in this browser session). */
     public String activeEnvironment() {
         String e = repo.setting(ENV_SETTING);
         return e == null ? "" : e;
     }
 
+    private final java.util.Map<String, String> sessionEnvironment = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** The environment picked in the current browser session, else the saved default. A run copies this when it starts. */
+    public String effectiveEnvironment() {
+        String sid = com.qa.utility.security.SessionContext.current();
+        String own = sid == null ? null : sessionEnvironment.get(sid);
+        return own != null ? own : activeEnvironment();
+    }
+
+    /** Picks the environment for this browser session (and remembers it as the default for sessions that have not picked one). */
     public void setActiveEnvironment(String env) {
         String e = com.qa.utility.model.Environments.canonical(env);
         if (!e.isEmpty() && !ENVIRONMENTS.contains(e)) throw ApiException.badRequest("Environment must be QA, Staging, Development or empty");
+        String sid = com.qa.utility.security.SessionContext.current();
+        if (sid != null) sessionEnvironment.put(sid, e);
         repo.putSetting(ENV_SETTING, e);
     }
 
@@ -278,7 +291,7 @@ public class VariableService {
                 for (VarRow r : rows) if (r.scope().equals("FOLDER") && r.folderId() == fid) return Optional.of(found(r, "folder"));
             }
         }
-        String env = activeEnvironment();
+        String env = scope != null && scope.environment() != null ? scope.environment() : effectiveEnvironment();
         if (!env.isEmpty()) {
             for (VarRow r : rows) if (r.scope().equals("ENVIRONMENT") && r.environment().equals(env)) return Optional.of(found(r, env + " environment"));
         }
